@@ -1,0 +1,37 @@
+"""所有路徑與參數集中於此(threads-sync 規則:換機器/遷 VPS 只改這個檔案)。
+
+時間欄位一律 UTC epoch 秒 (int)。秘密不放這裡:以 *_ENV 常數指名環境變數。
+"""
+
+from pathlib import Path
+
+# ── 資料根目錄(本地、OneDrive 外;遷 VPS 時改這行) ──────────────────
+DATA_DIR = Path(r"C:\Users\tcart\my-agent-data")
+
+# ── DB1:System of Record ───────────────────────────────────────────
+STATE_DB = DATA_DIR / "state.db"
+
+# ── DB2:Obsidian vault(人類知識介面;part-003 起使用) ─────────────
+VAULT_PATH = DATA_DIR / "vault"
+
+# ── 衍生物與原始記錄(part-003 起使用) ──────────────────────────────
+INDEX_DB = DATA_DIR / "index.db"          # 向量索引(可整檔刪除重建)
+TRANSCRIPT_DIR = DATA_DIR / "transcript"  # 冷儲存 JSONL + .idx
+
+# ── 秘密(以環境變數名引用,值不落地 repo) ──────────────────────────
+DISCORD_TOKEN_ENV = "MY_AGENT_DISCORD_TOKEN"           # Phase 2.5
+DISCORD_ALLOWED_USER_ID_ENV = "MY_AGENT_DISCORD_ALLOWED_USER_ID"  # 白名單(逗號分隔)
+LLM_API_KEY_ENV = "MY_AGENT_LLM_API_KEY"       # Phase 2
+
+# ── LLM(OpenAI 相容 API;backlog-002 定案) ─────────────────────────
+LLM_BASE_URL_ENV = "MY_AGENT_LLM_BASE_URL"     # 未設 = OpenAI 官方
+LLM_MODEL_CHEAP = "gpt-4o-mini"                # bounded 任務:分類/抽取/格式化
+LLM_MODEL_STRONG = "gpt-4o"                    # 綜合與決策(orchestrator)
+
+# ── 記憶系統(part-003;docs/MEMORY-zh.md §3) ───────────────────────
+HEALTH_DECAY_PER_DAY = 0.05                    # 線性日衰減(1.0 → 0 需 20 天)
+TRASH_RETENTION_DAYS = 14                      # trash 保留期(期內被引用可復活)
+DISTILL_MIN_CONFIDENCE = 0.6                   # 蒸餾決策低於此即跳過
+EMBED_MODEL = "text-embedding-3-small"         # OpenAI 相容 /v1/embeddings
+EMBED_DIM = 1536
+EMBED_BASE_URL_ENV = "MY_AGENT_EMBED_BASE_URL" # 未設 = 同 LLM_BASE_URL

@@ -1,0 +1,17 @@
+# 資料與秘密(state.db、playwright session、cookies 等)絕不 commit
+data/
+*.db
+*.db-wal
+*.db-shm
+cookies.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# 外部工具狀態
+.codegraph/
+.omo/

@@ -1,0 +1,69 @@
+﻿{
+  "parts": {
+    "part-001": {
+      "slices": {
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_schema.py -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run `python -m core.stm init` twice; second run must be a no-op. Inspect state.db tables with sqlite3."
+          ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Via CLI add one schedule item, one task, one project entry; query them from a fresh process to confirm persistence."
+          ]
+        }
+      }
+    },
+    "part-002": {
+      "slices": {
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_writer.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": []
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_subagents.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "With env vars set, run one real-LLM schedule parse and inspect the proposal JSON."
+          ]
+        },
+        "slice-003": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001",
+            "slice-002"
+          ],
+          "manualQa": [
+            "Real LLM: schedule via natural language, preview, confirm, verify via stm schedule list. Then set remind_at to past and run --job remind; verify console notification and rrule advance."
+          ]
+        }
+      }
+    }
+  }
+}

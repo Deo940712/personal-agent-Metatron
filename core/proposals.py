@@ -1,0 +1,176 @@
+"""提案(Proposal)信封與 payload 驗證(ARCHITECTURE §3.1)。
+
+純確定性程式,無 LLM、無 I/O。writer.py 在此之上做 DB 相關驗證與落地。
+
+part-002 範圍:schedule_change / task_change。
+vault 類(classify_note / vault_maintenance / agent_note / project_update)
+於 part-003+ 各自的 part 加入 PAYLOAD_VALIDATORS。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+# ── 常數(§3.1 對照表)────────────────────────────────────────────────
+
+KNOWN_AGENTS = {"schedule", "curator", "librarian", "coding_tracker", "orchestrator"}
+
+SCHEDULE_ACTIONS = {"add", "update", "done", "cancel"}
+
+# 需使用者確認的 action(§3.1 規則 7:done 與查詢免確認)
+CONFIRM_REQUIRED_ACTIONS = {"add", "update", "cancel"}
+
+SCHEDULE_FIELDS = {"title", "detail", "start_at", "end_at", "remind_at", "rrule"}
+TASK_FIELDS = {"title", "detail", "due_at"}
+
+_INT_FIELDS = {"start_at", "end_at", "remind_at", "due_at"}
+
+# B2:NOT NULL 欄位不可被 update 成 None(nullable 欄位 None = 清除,合法)
+_NOT_NULL_FIELDS = {"title", "start_at"}
+
+# B3:epoch 合理範圍 2000-01-01 ~ 2100-01-01(界外值會毒化 fmt_when/list)
+EPOCH_MIN = 946_684_800
+EPOCH_MAX = 4_102_444_800
+
+
+@dataclass
+class Proposal:
+    """統一信封。target:DB1 rowid(字串數字)或 vault 路徑;add 時可為 'new'。"""
+    agent: str
+    proposal_type: str
+    target: str
+    payload: dict[str, Any]
+    confidence: float
+    evidence: list[str] = field(default_factory=list)
+
+
+class ProposalError(ValueError):
+    """信封/payload 層級的驗證失敗(writer 會拒絕並記 events)。"""
+
+
+def parse_envelope(raw: dict[str, Any]) -> Proposal:
+    """dict(通常來自 LLM JSON)→ Proposal。缺欄/型別錯 → ProposalError。"""
+    missing = {"agent", "proposal_type", "target", "payload", "confidence"} - raw.keys()
+    if missing:
+        raise ProposalError(f"envelope missing fields: {sorted(missing)}")
+
+    agent = raw["agent"]
+    if agent not in KNOWN_AGENTS:
+        raise ProposalError(f"unknown agent: {agent!r}")
+
+    confidence = raw["confidence"]
+    if not isinstance(confidence, (int, float)) or not (0.0 <= confidence <= 1.0):
+        raise ProposalError(f"confidence out of [0,1]: {confidence!r}")
+
+    payload = raw["payload"]
+    if not isinstance(payload, dict):
+        raise ProposalError("payload must be an object")
+
+    evidence = raw.get("evidence", [])
+    if not isinstance(evidence, list) or not all(isinstance(e, str) for e in evidence):
+        raise ProposalError("evidence must be a list of strings")
+
+    target = raw["target"]
+    if not isinstance(target, str) or not target:
+        raise ProposalError("target must be a non-empty string")
+
+    return Proposal(
+        agent=agent,
+        proposal_type=str(raw["proposal_type"]),
+        target=target,
+        payload=payload,
+        confidence=float(confidence),
+        evidence=evidence,
+    )
+
+
+# ── payload 驗證(每 proposal_type 一個)─────────────────────────────
+
+def _validate_change(payload: dict[str, Any], allowed_fields: set[str]) -> None:
+    action = payload.get("action")
+    if action not in SCHEDULE_ACTIONS:
+        raise ProposalError(f"illegal action: {action!r} (allowed: {sorted(SCHEDULE_ACTIONS)})")
+
+    fields = payload.get("fields", {})
+    if not isinstance(fields, dict):
+        raise ProposalError("fields must be an object")
+
+    unknown = fields.keys() - allowed_fields
+    if unknown:
+        raise ProposalError(f"unknown fields: {sorted(unknown)}")
+
+    # B1:update 空 fields → SQL 會炸,這裡先拒絕
+    if action == "update" and not fields:
+        raise ProposalError("update requires at least one field")
+
+    # B2:NOT NULL 欄位不可為 None
+    for key in fields.keys() & _NOT_NULL_FIELDS:
+        if fields[key] is None:
+            raise ProposalError(f"{key} cannot be null")
+
+    for key in fields.keys() & _INT_FIELDS:
+        v = fields[key]
+        if v is None:
+            continue  # nullable 時間欄位:None = 清除
+        # B4:bool 是 int 的子類,必須顯式排除
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ProposalError(f"{key} must be int epoch seconds, got {type(v).__name__}")
+        # B3:界外 epoch 會毒化所有 list 顯示
+        if not (EPOCH_MIN <= v <= EPOCH_MAX):
+            raise ProposalError(f"{key} out of range [2000-01-01, 2100-01-01]: {v}")
+
+    if action == "add":
+        title = fields.get("title")
+        if not isinstance(title, str) or not title.strip():
+            raise ProposalError("add requires non-empty fields.title")
+        if allowed_fields is SCHEDULE_FIELDS and "start_at" not in fields:
+            raise ProposalError("schedule add requires fields.start_at")
+
+    # rrule 確定性驗證(LLM 產字串,這裡把關;part-002 支援 DAILY/WEEKLY 子集)
+    rrule = fields.get("rrule")
+    if rrule is not None:
+        _validate_rrule(rrule)
+
+
+def _validate_rrule(rrule: str) -> None:
+    if not isinstance(rrule, str) or not rrule.startswith("FREQ="):
+        raise ProposalError(f"rrule must start with FREQ=: {rrule!r}")
+    parts = dict(p.split("=", 1) for p in rrule.split(";") if "=" in p)
+    if parts.get("FREQ") not in {"DAILY", "WEEKLY"}:
+        raise ProposalError(f"unsupported FREQ (part-002 supports DAILY/WEEKLY): {rrule!r}")
+    byday = parts.get("BYDAY")
+    if byday is not None:
+        valid = {"MO", "TU", "WE", "TH", "FR", "SA", "SU"}
+        if not set(byday.split(",")) <= valid:
+            raise ProposalError(f"illegal BYDAY: {byday!r}")
+
+
+def validate_schedule_change(payload: dict[str, Any]) -> None:
+    _validate_change(payload, SCHEDULE_FIELDS)
+
+
+def validate_task_change(payload: dict[str, Any]) -> None:
+    _validate_change(payload, TASK_FIELDS)
+
+
+PAYLOAD_VALIDATORS = {
+    "schedule_change": validate_schedule_change,
+    "task_change": validate_task_change,
+    # part-003+: classify_note / project_update / agent_note / vault_maintenance
+}
+
+
+def validate(proposal: Proposal) -> None:
+    """信封已 parse 後的 payload 級驗證。未知 proposal_type → ProposalError。"""
+    validator = PAYLOAD_VALIDATORS.get(proposal.proposal_type)
+    if validator is None:
+        raise ProposalError(f"unknown proposal_type: {proposal.proposal_type!r}")
+    validator(proposal.payload)
+
+
+def needs_confirmation(proposal: Proposal) -> bool:
+    """§3.2 閘門第二層:寫入類 action 需使用者確認;done 免確認。"""
+    if proposal.proposal_type in {"schedule_change", "task_change"}:
+        return proposal.payload.get("action") in CONFIRM_REQUIRED_ACTIONS
+    return True  # 未知類型保守處理(實際上 validate 已擋)

@@ -72,6 +72,12 @@ Mem0 / Hermes 等,設計依據見 [ARCHITECTURE.md](ARCHITECTURE.md) §12):
 
 技術細節(完整 API、不變量、故障恢復):[docs/MEMORY-zh.md](docs/MEMORY-zh.md)
 
+**已規劃的記憶強化(part-004.5,依 2026 論文實證)**:主題連續性蒸餾(Membox:
+同主題跨天串成事件 trace,不再按天碎片化)、矛盾偵測 + supersede 執行(Mneme:
+新舊偏好雙側保留、檢索並列、引用前查 superseded_by)、RRF 跨段融合檢索(Cognis)。
+待訂(觸發條件制):cross-encoder rerank(golden queries 出排名問題時)、
+per-category 衰減速率(真實使用 1-2 月有數據時)。
+
 ## 所有 Agent 的職能
 
 **拓撲:Orchestrator + 無狀態子 agent**(2026 年 LangGraph / Claude Agent SDK /
@@ -181,6 +187,7 @@ python -m pytest tests/ -q     # 210 tests
 - ✅ part-002.5 Discord bot(兩階段確認 + DM 推播)
 - ✅ part-003 記憶核心(冷儲存/代謝/蒸餾/四段檢索)
 - 📋 part-004 sync skills(threads/x/fb → vault)+ curator + recall
+- 📋 part-004.5 記憶強化(主題 trace / supersede / RRF)
 - 📋 part-005 coding_tracker(git + beacon + opencode 三源)
 - 📋 part-003.5 儀表板 / part-006 MCP server
 

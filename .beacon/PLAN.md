@@ -27,6 +27,7 @@
 | part-003 | **done** (2026-07-13) | 記憶核心完成：transcript+health+consolidate+vindex+retrieve；162 tests 綠、Phase 3 gate 通過（端到端實跑） | `.beacon/parts/part-003/DESIGN.md` | `.beacon/parts/part-003/TODO.md` |
 | part-003.5 | planned | 唯讀網頁儀表板（INTERFACES.md §5）：FastAPI+htmx、127.0.0.1、`mode=ro`、五版塊 | TBD | TBD |
 | part-004 | planned | sync skills：threads-sync 接入 → x_sync（xarchive JSON 轉換器起步）→ fb_sync（先 probe） | TBD | TBD |
+| part-004.5 | planned | 記憶強化（Membox/Mneme/Cognis 實證改進）：①主題連續性蒸餾（按天+主題分組、跨天 trace 連結）②矛盾偵測+supersede 執行（profile 注入既有、superseded_by 落地、recall 矛盾並列）③RRF 跨段融合檢索 | TBD | TBD |
 | part-005 | planned | coding_tracker：三源進度掃描（git log + .beacon/CURRENT 解析 + OpenCode sessions）→ project_update 提案 | TBD | TBD |
 | part-006 | backlog | MCP server：唯讀查詢暴露（recall/schedule/project_status），寫入仍走 writer + 確認 | TBD | TBD |
 

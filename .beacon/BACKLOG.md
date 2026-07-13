@@ -116,6 +116,41 @@ Status: triage
 
 Summary: 借鑑 Horizon：AI 評分 0-10 + 閾值過濾 + 分類配額（category_groups limit）+ 跨源同文合併（URL/內容 hash）。隨 part-004 curator 設計落地。
 
+### backlog-022: 主題連續性蒸餾（part-004.5）
+
+Type: idea
+Status: triage
+
+Summary: 借鑑 [Membox](https://arxiv.org/abs/2601.03785)（2026，temporal F1 +68% vs Mem0/A-MEM）：蒸餾分組從「按天」改「按天+LLM 標主題」；consolidator 輸出加 topic 欄位；跨天同主題筆記自動 related 連結串成事件 trace。解「同主題散多天=碎片筆記」問題。輕量版——不引入整套 Topic Loom（我們的 events 粒度本來就粗）。
+
+### backlog-023: 矛盾偵測 + supersede 執行（part-004.5）
+
+Type: design-debt
+Status: triage
+
+Summary: supersede 鏈設計在 ARCHITECTURE §5.2 但無程式碼執行。借鑑 [Mneme](https://mingllm.com/prehistoric/paper.pdf)（矛盾解析 0.66 vs Mem0 0.22，關鍵=雙側保留+co-surface+contradiction-first read）：①consolidator 蒸餾 preference 前注入既有 agent/profile INDEX 描述 → 可輸出 supersedes 決策（過欄位級驗證）→ writer 給舊筆記補 superseded_by；②recall 契約加「引用前查 superseded_by；同主題矛盾必須並列詢問使用者」。
+
+### backlog-024: RRF 跨段融合檢索（part-004.5）
+
+Type: idea
+Status: triage
+
+Summary: 借鑑 Cognis/Mneme 標配：retrieve.search 從「前段命中即返回」改「index/FTS/vec 三段並行取候選 → Reciprocal Rank Fusion 合分 → top-k」；保留 index-first 強命中（多 token）短路以維持零成本路徑。約 20 行核心邏輯。
+
+### backlog-025: 檢索後 cross-encoder rerank（待訂）
+
+Type: idea
+Status: triage
+
+Summary: Cognis 用 BGE 類 cross-encoder rerank 收尾。個人量級（<1 萬筆記）暫不需要；**觸發條件：golden queries（backlog-007）出現排名問題時再做**。
+
+### backlog-026: per-category 衰減速率（待訂）
+
+Type: idea
+Status: triage
+
+Summary: 現在全表統一 0.05/day。daily-log 類可快衰、coding 決策類慢衰。**觸發條件：真實使用 1-2 個月後，有 events 存取數據再調**——現在調是憑空猜參數。同時記錄 known limitation：Obsidian 手動開筆記不回血（無 hook；可能解法=librarian 掃 workspace 記錄，侵入性高暫不做）。
+
 ### backlog-019: FIRE 拆卡方法論進 curator
 
 Type: idea

@@ -761,6 +761,11 @@ flowchart LR
 | Orchestrator + 無狀態子 agent | LangGraph supervisor / Claude Agent SDK subagents / OpenAI Agents SDK triage 收斂拓撲 (2026) |
 | Agent 提議、程式驗證、單一 writer | memory-river 夜間鞏固的 LLM 決策欄位級驗證 + 多 agent 資料競爭防護 |
 | 中文拆卡方法論(curator)、週回顧蒸餾 | [twhsi/skills](https://github.com/twhsi/skills) (2026):fire-analysis-card 四層結構、weekly-reverse-review;方法論進 prompt 契約不改 core(backlog-019/020) |
+| 主題連續性蒸餾(part-004.5) | [Membox](https://arxiv.org/abs/2601.03785) (2026):同主題聚盒+跨天 trace,temporal F1 +68%;批判 fragmentation-compensation 範式(backlog-022) |
+| 矛盾偵測+supersede 執行(part-004.5) | Mneme (2026):雙側保留+檢索 co-surface+contradiction-first read,矛盾解析 0.66 vs Mem0 0.22(backlog-023) |
+| RRF 跨段融合(part-004.5) | Cognis (arXiv 2604.19771) / Mneme (2026):BM25+向量 RRF 為 2026 標配;取代「前段命中即返回」(backlog-024) |
+| **暫不做**:cross-encoder rerank、per-category 衰減 | 觸發條件制(backlog-025/026):golden queries 出排名問題 / 真實使用 1-2 月有數據——避免憑空猜參數 |
+| **不做**:WorldDB 式 ontology 知識圖譜 | WorldDB (2026) 96.4% LongMemEval SOTA,但遞迴世界容器+ontology 對單人助理過度工程(同既有 KG non-goal) |
 
 ## 13. 記憶操作對照表(六原語,每個都要有家)
 

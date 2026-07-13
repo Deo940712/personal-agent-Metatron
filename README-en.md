@@ -80,6 +80,14 @@ agent can "rehydrate" the exact original text anytime.
 Implementation spec (full APIs, invariants, failure recovery):
 [docs/MEMORY-en.md](docs/MEMORY-en.md)
 
+**Planned memory upgrades (part-004.5, backed by 2026 papers)**: topic-continuity
+distillation (Membox: same-topic events woven into cross-day traces instead of
+per-day fragments), contradiction detection + supersede execution (Mneme: keep
+both sides, co-surface at retrieval, check superseded_by before citing), and RRF
+cross-stage fusion retrieval (Cognis). Deferred (trigger-based): cross-encoder
+reranking (when golden queries show ranking issues) and per-category decay rates
+(after 1-2 months of real usage data).
+
 ## All Agents and Their Duties
 
 **Topology: Orchestrator + stateless subagents** (the production standard that
@@ -196,6 +204,7 @@ into a regression test.
 - ✅ part-002.5 Discord bot (two-stage confirmation + DM push)
 - ✅ part-003 Memory core (cold storage / metabolism / distillation / cascade retrieval)
 - 📋 part-004 Sync skills (threads/x/fb → vault) + curator + recall
+- 📋 part-004.5 Memory upgrades (topic traces / supersede / RRF)
 - 📋 part-005 coding_tracker (git + beacon + opencode signals)
 - 📋 part-003.5 dashboard / part-006 MCP server
 

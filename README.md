@@ -80,6 +80,10 @@ queries 出排名問題時)、per-category 衰減速率(真實使用 1-2 月有�
 
 ## 所有 Agent 的職能
 
+**專案代號:Metatron**(天界書記官)——orchestrator 本人。子 agent 從
+Metatron 麾下天使名挑選(顯示層命名;程式碼識別符維持技術名以保 API 穩定,
+完整映射見 [AGENTS.md](AGENTS.md) §Angel naming registry)。
+
 **拓撲:Orchestrator + 無狀態子 agent**(2026 年 LangGraph / Claude Agent SDK /
 OpenAI Agents SDK 收斂的生產標準)。子 agent 拿 scoped 輸入、回結構化提案、即棄。
 
@@ -91,15 +95,18 @@ tags 在受控詞彙表、evidence 屬實、enum 合法…)+ 三層危險閘門(
 
 ### 子 agent 一覽
 
-| 子 Agent | 職能 | 輸入 | 輸出 | 狀態 |
+| 天使 / 子 Agent | 職能 | 輸入 | 輸出 | 狀態 |
 |---|---|---|---|---|
-| **schedule** | 自然語言 → 行程/待辦提案(「明天下午兩點開會提前30分提醒」);rrule 重複行程 | 使用者原句 + 現有行程 | `schedule_change` / `task_change` 提案 | ✅ |
-| **consolidator** | 夜間蒸餾:到期事件 → 日誌摘要(episodic)/ 使用者偏好(agent/profile);每個決策過欄位級驗證,不得虛構來源 | 到期 events 批次 | 蒸餾組(kind/title/summary/tags/source_ids/confidence) | ✅ |
-| **curator** | 貼文評分(0-10 閘門 4.0)、分類、依日期去重、入 vault;manual_tags 永不覆蓋 | inbox 筆記批次 | `classify_note` 提案 | ✅ |
-| **recall** | 知識庫問答:index→FTS→向量 RRF 融合 + rehydrate;引用程式面驗證(假引用整答丟棄);superseded_by 提示 | 查詢字串 | 帶引用的答案 | ✅ |
-| **coding_tracker** | vibe coding 進度:三源唯讀掃描(git + `.beacon/CURRENT` + OpenCode sessions,beacon 最高權威)→ 每專案 phase/blockers/next | 已註冊專案 | `project_update` 提案 | ✅ |
-| **librarian** | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延維護;兩階段、快照可回滾、永不刪除 | vault.scan 確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 backlog-017 |
+| **Sandalphon** — `schedule` | 自然語言 → 行程/待辦提案(「明天下午兩點開會提前30分提醒」);rrule 重複行程 | 使用者原句 + 現有行程 | `schedule_change` / `task_change` 提案 | ✅ |
+| **Raziel** — `consolidator` | 夜間蒸餾:到期事件 → 日誌摘要(episodic)/ 使用者偏好(agent/profile);每個決策過欄位級驗證,不得虛構來源 | 到期 events 批次 | 蒸餾組(kind/title/summary/tags/source_ids/confidence) | ✅ |
+| **Jophiel** — `curator` | 貼文評分(0-10 閘門 4.0)、分類、依日期去重、入 vault;manual_tags 永不覆蓋 | inbox 筆記批次 | `classify_note` 提案 | ✅ |
+| **Zerachiel** — `recall` | 知識庫問答:index→FTS→向量 RRF 融合 + rehydrate;引用程式面驗證(假引用整答丟棄);superseded_by 提示 | 查詢字串 | 帶引用的答案 | ✅ |
+| **Uriel** — `coding_tracker` | vibe coding 進度:三源唯讀掃描(git + `.beacon/CURRENT` + OpenCode sessions,beacon 最高權威)→ 每專案 phase/blockers/next | 已註冊專案 | `project_update` 提案 | ✅ |
+| **Anael** — `librarian` | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延維護;兩階段、快照可回滾、永不刪除 | vault.scan 確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 backlog-017 |
 | sync-{threads,x,fb} | 平台抓取管線(**非 LLM**,純 CLI,idempotent 可續傳) | cursor | new_count, status | threads ✅ / x,fb 📋 |
+
+> Michael / Camael / Raphael / Ophanim / Cassiel / Azrael 是使用者提名但**目前無對應 agent** 的天使名,
+> 已在 [AGENTS.md](AGENTS.md) §Angel naming registry 「Archived」段封存。日後若真的獨立成 agent 才啟用,不預先佔位。
 
 子 agent 分兩型:**純函數型**(單次 LLM 呼叫、無工具、可重放測試——schedule/
 consolidator/curator/librarian/coding_tracker)與**代理型**(唯讀工具白名單、

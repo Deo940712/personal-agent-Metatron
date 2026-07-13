@@ -1,5 +1,10 @@
 ﻿# MY AGENT — 個人行程 + 知識庫助理 架構文件
 
+> **專案代號:Metatron**(天界書記官)——orchestrator 的角色定位。子 agent 從
+> Metatron 麾下天使名選取(Sandalphon/Raziel/Zerachiel/Jophiel/Uriel/Anael)。
+> 完整命名映射與封存清單見 [AGENTS.md](AGENTS.md) §Angel naming registry。
+> 天使名為顯示層命名,程式碼識別符(role_type / 模組 / --job)維持技術名以保 API 穩定。
+>
 > 狀態:設計定案,實作依 `.beacon/` 推進。前身參考:[threads-sync](https://github.com/Deo940712/threads-sync)
 > (Capture → State → Transform → Output 管線、config.py 集中路徑、SQLite 去重、每步 idempotent)。
 > 時間欄位:DB1 與冷儲存一律 **UTC epoch 秒 (INTEGER)**;vault frontmatter 是人類介面,用可讀字串(`YYYY-MM-DD HH:mm`)。

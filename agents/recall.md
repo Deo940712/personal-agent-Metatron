@@ -1,4 +1,10 @@
-# recall 子 agent 契約(知識庫問答)
+﻿# Zerachiel — recall 子 agent 契約(知識庫問答)
+
+> **天使名**:Zerachiel(澤拉基爾)——「神的命令」,卡巴拉七大天使之一,
+> 掌記憶回溯與審判前的見證。對應此 agent:記憶「讀」的一側——四段級聯檢索
+> (index / FTS / vector / rehydrate)+ 帶引用回答。
+> 程式碼識別符維持 `recall`(模組名 / 對外介面)。
+> 記憶「寫」的一側由 Raziel(consolidator)負責。
 
 type: agentic
 model: cheap

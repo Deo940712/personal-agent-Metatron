@@ -2,6 +2,11 @@
 
 ## What this repo is
 
+**Codename: Metatron** — the Heavenly Scribe orchestrator. Sub-agents are named
+after angels in Metatron's court (see "Angel naming registry" section below).
+Angel names are display-layer only; code identifiers (module names, role_type,
+--job flags) keep their technical names for API stability.
+
 A personal schedule + knowledge-base assistant agent (parts 001-005 + 002.5 + 004.5 all done,
 314 tests green; next: part-006 stdio MCP then part-003.5 dashboard). The full architecture decision record is in
 [ARCHITECTURE.md](ARCHITECTURE.md) — read it before implementing anything.
@@ -123,3 +128,43 @@ Full list in ARCHITECTURE.md §11. Highlights:
 - Health metabolism parameters (decay rate, heal amount, trash retention) — tune in part-003
 - Channels are thin adapters with ZERO business logic; all share
   `invoke(text, trigger, reply_to)`; writes never bypass writer+confirm regardless of source
+
+## Angel naming registry
+
+The orchestrator `core/agent.py` is codenamed **Metatron** (Heavenly Scribe).
+Sub-agents in `agents/` carry angelic display names; internal code identifiers
+(`role_type='schedule'`, `--job remind`, module `core/consolidate.py`, etc.) are
+UNCHANGED — refactoring stable APIs for cosmetics is not worth the churn.
+
+### Active (mapped to existing agents)
+
+| Angel | Role | Code identifier | Reason |
+|---|---|---|---|
+| **Metatron** | Orchestrator (this repo's identity) | `core/agent.py` | Heavenly Scribe, statutes all angels — matches Orchestrator |
+| **Sandalphon** | Schedule / intent parsing | `agents/schedule.md`, `role_type='schedule'` | Metatron's twin, weaves human prayers — only human-facing agent |
+| **Jophiel** | Curator (vault ingestion beautifier) | `agents/curator.md`, `role_type='classify_note'` | Angel of Beauty — aesthetic gate before knowledge lands |
+| **Raziel** | Consolidator (nightly distillation, MEM write side) | `agents/consolidator.md`, `--job consolidate` | "Book of Raziel" — writes cosmic knowledge into vault |
+| **Zerachiel** | Recall (RAG retrieval, MEM read side) | `agents/recall.md`, `role_type='agentic'` | Angel of memory / testimony — reads back what Raziel wrote |
+| **Uriel** | Coding tracker (project foresight) | `agents/coding_tracker.md`, `--job track` | "Light of God" — sees the whole picture, foretold the flood |
+
+### Reserved (mapped to backlog agents, docs-only until built)
+
+| Angel | Future role | Backlog id | Notes |
+|---|---|---|---|
+| **Anael** | Vault maintenance (orphans / broken links / dedupe) | backlog-017 (`librarian`) | Angel of Order — keeps the library in harmony |
+
+### Archived (angel names user proposed but no matching agent exists yet)
+
+Kept for future use; do NOT create agents for these without a real design need.
+
+| Angel | Proposed role | Why archived |
+|---|---|---|
+| **Michael** | Guardrail / danger gate | Currently lives inside `writer.py` — no independent agent |
+| **Camael** | Red-team / adversarial tester | Adversarial audit currently runs as beacon slice gate, not a persistent agent |
+| **Raphael** | Debug / retry | Retry is currently a code-level top-level guard, not an agent |
+| **Ophanim** | Monitoring / log analysis | `agent_runs` table + planned dashboard cover this without an agent |
+| **Cassiel** | Cron / scheduling | Scheduling is a Windows Task Scheduler job (`--job remind`), not a subagent |
+| **Azrael** | Cleanup / GC / process termination | Metabolism/GC is a code-level cron in `core/metabolize.py`, not an agent |
+
+When any archived name gets promoted to active, move the row to the "Active"
+table above and add a real `agents/<name>.md` contract in the same commit.

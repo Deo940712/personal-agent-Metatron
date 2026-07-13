@@ -1,4 +1,8 @@
-# curator 子 agent 契約(貼文評分 + 分類)
+﻿# Jophiel — curator 子 agent 契約(貼文評分 + 分類)
+
+> **天使名**:Jophiel(約菲爾)——美之天使、掌美與智慧啟蒙。對應此 agent:
+> 進 vault 前的評分/分類/去重,讓知識庫呈現的每一頁都經過美感篩選。
+> 程式碼識別符維持 `curator`(role_type / 模組名)。
 
 type: pure-function
 model: cheap

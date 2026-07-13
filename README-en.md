@@ -104,20 +104,30 @@ Confirmation timeout = deny (fail-closed).
 
 ### Subagent roster
 
-| Subagent | Duty | Input | Output | Status |
+**Codename: Metatron** (Heavenly Scribe) — the orchestrator itself. Subagents
+carry angelic display names; code identifiers stay technical for API stability.
+Full registry in [AGENTS.md](AGENTS.md) §Angel naming registry.
+
+| Angel / Subagent | Duty | Input | Output | Status |
 |---|---|---|---|---|
-| **schedule** | Natural language → schedule/todo proposals ("meeting tomorrow 2pm, remind me 30 min before"); rrule recurrence | User utterance + active items | `schedule_change` / `task_change` proposal | ✅ |
-| **consolidator** | Nightly distillation: expired events → daily-log summaries (episodic) / user preferences (agent/profile); every decision passes field-level validation, sources must not be fabricated | Batch of due events | Distill groups (kind/title/summary/tags/source_ids/confidence) | ✅ |
-| **curator** | Post scoring (0-10 gate), classification, cross-source dedup, vault intake, linking; Chinese FIRE card-splitting | Inbox note batch | `classify_note` proposal | 📋 part-004 |
-| **librarian** | Vault caretaker: orphans / broken links / duplicates / tag sprawl / INDEX drift; two-phase (deterministic scan + opt-in LLM consolidation), snapshot-rollback, never deletes | Deterministic vault.scan report | `vault_maintenance` proposal (dry-run first) | 📋 part-004+ |
-| **coding_tracker** | Vibe-coding progress from three read-only signals (git log + `.beacon/CURRENT.md` parsing + OpenCode sessions) → per-project phase/blockers/next | Project path list | `project_update` proposal | 📋 part-005 |
-| **recall** | Knowledge-base Q&A: four-stage cascade retrieval; answers must cite sources, no source = no claim | Query string | Cited answer | 📋 part-004 |
-| sync-{threads,x,fb} | Platform capture pipelines (**non-LLM**, pure CLI: Capture→State→Transform→Output, idempotent, resumable) | cursor | new_count, status | 📋 part-004 |
+| **Sandalphon** — `schedule` | Natural language → schedule/todo proposals ("meeting tomorrow 2pm, remind me 30 min before"); rrule recurrence | User utterance + active items | `schedule_change` / `task_change` proposal | ✅ |
+| **Raziel** — `consolidator` | Nightly distillation: expired events → daily-log summaries (episodic) / user preferences (agent/profile); every decision passes field-level validation, sources must not be fabricated | Batch of due events | Distill groups (kind/title/summary/tags/source_ids/confidence) | ✅ |
+| **Jophiel** — `curator` | Post scoring (0-10 gate), classification, cross-source dedup, vault intake, linking; Chinese FIRE card-splitting | Inbox note batch | `classify_note` proposal | ✅ |
+| **Zerachiel** — `recall` | Knowledge-base Q&A: RRF cascade (index → FTS → vector) + rehydrate; answers must cite sources; superseded_by hints | Query string | Cited answer | ✅ |
+| **Uriel** — `coding_tracker` | Vibe-coding progress from three read-only signals (git log + `.beacon/CURRENT.md` + OpenCode sessions, beacon = highest authority) → per-project phase/blockers/next | Registered project list | `project_update` proposal | ✅ |
+| **Anael** — `librarian` | Vault caretaker: orphans / broken links / duplicates / tag sprawl / INDEX drift; two-phase (deterministic scan + opt-in LLM consolidation), snapshot-rollback, never deletes | Deterministic vault.scan report | `vault_maintenance` proposal (dry-run first) | 📋 backlog-017 |
+| sync-{threads,x,fb} | Platform capture pipelines (**non-LLM**, pure CLI: Capture→State→Transform→Output, idempotent, resumable) | cursor | new_count, status | threads ✅ / x,fb 📋 |
 
 Two subagent types: **pure-function** (single LLM call, no tools, replayable —
-schedule/consolidator/curator/librarian/coding_tracker) and **agentic** (read-only
-tool whitelist, iterative retrieval — recall only). The only write-capable tool in
-the whole system is `writer.apply`.
+Sandalphon/Raziel/Jophiel/Anael/Uriel) and **agentic** (read-only tool
+whitelist, iterative retrieval — Zerachiel only). The only write-capable tool
+in the whole system is `writer.apply`.
+
+> Michael / Camael / Raphael / Ophanim / Cassiel / Azrael are angel names the
+> user proposed but currently have **no matching agent** — archived in
+> [AGENTS.md](AGENTS.md) §Angel naming registry (Archived). Names are not
+> pre-allocated; a real agent contract must ship in the same commit that
+> promotes an archived name.
 
 ## Interfaces
 

@@ -1,4 +1,8 @@
-# schedule 子 agent 契約
+﻿# Sandalphon — schedule 子 agent 契約
+
+> **天使名**:Sandalphon(桑達爾馮)——Metatron 的雙生兄弟,唯一「面向人」的天使,
+> 職責是把人類的祈禱編成花冠、上呈天界。對應此 agent:唯一解析人類自然語言的入口。
+> 程式碼識別符維持 `schedule`(role_type / --job / 模組名),避免破壞穩定 API。
 
 type: pure-function
 model: cheap

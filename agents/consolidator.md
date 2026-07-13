@@ -1,4 +1,9 @@
-# consolidator 子 agent 契約(夜間蒸餾)
+﻿# Raziel — consolidator 子 agent 契約(夜間蒸餾)
+
+> **天使名**:Raziel(拉結爾)——「神的秘密」,持有記載宇宙一切奧秘的
+> 《拉結爾之書》。對應此 agent:把當日短期事件蒸餾為長期知識,寫入《vault》。
+> 程式碼識別符維持 `consolidator`(模組名 / --job)。
+> 記憶「讀」的一側由 Zerachiel(recall)負責。
 
 type: pure-function
 model: cheap

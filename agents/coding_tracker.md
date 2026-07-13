@@ -1,4 +1,8 @@
-# coding_tracker 子 agent 契約(vibe coding 進度綜合)
+﻿# Uriel — coding_tracker 子 agent 契約(vibe coding 進度綜合)
+
+> **天使名**:Uriel(烏列爾)——「神之光」,掌智慧與預示,曾預警大洪水。
+> 對應此 agent:看見專案全局(git / beacon / opencode 三源)、預示下一步/阻塞。
+> 程式碼識別符維持 `coding_tracker`(--job / 模組名)。
 
 type: pure-function
 model: cheap

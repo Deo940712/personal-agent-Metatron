@@ -1,0 +1,26 @@
+# ===== SENSITIVE - NEVER COMMIT =====
+# Exported browser cookies (login credentials!)
+cookies.json
+*cookies*.json
+# Playwright persistent session (contains logged-in cookies)
+/data/playwright/
+
+# ===== Local state / personal content =====
+# SQLite state + raw GraphQL dumps (contain personal saved-post data)
+/data/
+# Synced Obsidian vault = personal saved posts + downloaded images
+/vault/
+/vault_backup/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+
+# ===== Tooling / editor =====
+.codegraph/
+.omo/
+
+# Keep dir structure markers
+!.gitkeep

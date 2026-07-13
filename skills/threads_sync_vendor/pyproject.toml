@@ -1,0 +1,21 @@
+[project]
+name = "threads-sync"
+version = "0.1.0"
+description = "Incremental sync of saved Threads posts into an Obsidian vault as Markdown"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright>=1.48",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.7",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

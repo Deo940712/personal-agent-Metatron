@@ -213,8 +213,16 @@ flowchart LR
 | **對內消費(client)** | 不做 | skills 是純 CLI 管線,不需要 MCP client;避免多一層依賴 |
 | **Claude skills** | 不衝突 | `agents/*.md` 是本專案自己的 prompt 契約;若之後想讓 Claude Code 直接操作 vault,可另寫 SKILL.md(參考 DesktopCommanderMCP 的 knowledge-base skill),與本系統互不干擾 |
 
-MCP server 是唯讀優先:先暴露查詢類工具;寫入類(如 `schedule_add`)必須仍走
-writer.apply 驗證 + 使用者確認,不因來源是 MCP 而繞過。
+MCP server **一套工具、兩種傳輸**(part-006 定案):`core/mcp/tools.py` 工具定義
+與傳輸分離,共用兩個薄 adapter——
+- **slice-1 本機 stdio**:OpenCode 直接 spawn Python 進程,零網路(現可做)
+- **slice-2 遠程 HTTP/SSE**:VPS 常駐,綁 **Tailscale IP**(WireGuard 私有網路,
+  不上公網 → 零認證複雜度、零攻擊面;綁公網 IP 啟動即拒絕,fail-closed)
+
+讀寫皆可:查詢類免確認;寫入類(`schedule_add`)復用 chat.py 兩階段——回 pending +
+預覽,使用者在任一介面確認(pending 是 DB1 共用,跨介面天然一致)。**寫入不因
+來源是 MCP 而繞過 writer + 確認。** 遠程走 Tailscale 私有網路後,recall 全文的
+內容分級(§4.1)解除。
 
 ## 4. 記憶模型:四層 × 三時間尺度
 

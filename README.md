@@ -1,4 +1,4 @@
-﻿# Sandalphon  — 個人行程 + 知識庫助理
+﻿# Metatron  — 個人行程 + 知識庫助理
 
 > 繁體中文 | [English](README-en.md)
 

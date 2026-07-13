@@ -1,50 +1,21 @@
 ﻿# CURRENT
 
-Part: part-004
-Slice: slice-002
-Status: active
-Design authority: `.beacon/parts/part-004/DESIGN.md`
-TODO source: `.beacon/parts/part-004/TODO.md#part-004-slice-002-curator前處理--llm-契約--管線`
+Status: planning-only
 
-## Goal
+part-004 完成並歸檔（.beacon/done/part-004/，Phase 4 gate mock 端到端通過）。
+完整知識鏈就位：threads-sync → runner → inbox → curator（去重/評分/入庫）
+→ INDEX/vindex → recall（帶引用問答，引用驗證程式面保障）。
 
-inbox 筆記 → 確定性前處理（hash/去重/欄位補齊）→ LLM 評分+分類 → writer 驗證
-→ 正式入庫（registry + vindex）；低分只留 metadata。
+## 待使用者動作（累積四批真 QA）
 
-## Allowed Scope
+1. `MY_AGENT_LLM_API_KEY`（+ 選配 BASE_URL）→ 真 LLM/embedding QA
+2. Discord token + user id → 真 Discord QA
+3. threads-sync Playwright session（原機器 cookies）→ 真同步 QA
 
-- [ ] `core/curator_pre.py`：inbox 掃描、content_hash、跨源去重、§5.2 欄位補齊
-- [ ] `agents/curator.md`：評分+分類契約（閾值 4.0、配額、evidence 規則）
-- [ ] `core/curate.py`：pre → LLM 批次（≤10 篇）→ 驗證 → 落地 → 統計
-- [ ] writer：classify_note 落地（frontmatter 更新 + manual_tags 守衛 + registry + vindex）
-- [ ] INDEX 詞彙表擴充（threads-sync 14 類 + low-score）
-- [ ] `core/agent.py` 加 `--job curate`
-- [ ] pytest（mock LLM）：閘門/配額/去重/manual_tags/驗證攔截 + boundary
+## 下一步選項（PART 完成 = 自然暫停點）
 
-## Forbidden Scope
+- **part-004.5 記憶強化**：Membox 主題 trace / Mneme supersede / RRF（真資料前的最後強化）
+- **part-006 slice-1 stdio MCP**：遠端開發迴圈（dev_status/directive 佇列）——可插隊
+- part-003.5 唯讀儀表板 / part-005 coding_tracker
 
-- FIRE 拆卡完整版（backlog-019；先 summary+tags 起步）
-- recall（slice-003）
-
-## Files-scope
-
-core/curator_pre.py, core/curate.py, core/writer.py, core/proposals.py, agents/curator.md, core/agent.py, core/ltm.py, tests/test_curate.py
-
-## Expected Output
-
-假貼文丟 inbox → `--job curate` → 高分入 registry 可檢索、低分標 low-score；
-重複貼文合併；手動 tag 不被覆蓋。
-
-## Verification Plan
-
-- Unit: `python -m pytest tests/test_curate.py -q`
-- Regression: `python -m pytest tests/ -q`（223 不壞）
-- Manual QA: 假貼文 3 篇（高/低分/重複）端到端目檢
-
-## Current Blockers
-
-None
-
-## Recovery Incident
-
-None
+在 DESIGN 建立並 promote SLICE 前，無可執行 SLICE。

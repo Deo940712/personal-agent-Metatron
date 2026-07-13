@@ -61,8 +61,13 @@ def _fmt_projects(rows: list[dict]) -> str:
 
 
 def handle_message(text: str, *, channel_ref: str | None = None,
-                   db: Path | None = None, _api=None) -> Reply:
-    """階段1:訊息 → 回覆(可能帶待確認 pending_id)。"""
+                   db: Path | None = None, allow_recall: bool = False,
+                   _api=None) -> Reply:
+    """階段1:訊息 → 回覆(可能帶待確認 pending_id)。
+
+    allow_recall:本機 CLI/MCP 為 True(知識查詢放行);Discord 為 False
+    (內容分級 §4.1——知識不經 Discord;Tailscale MCP 到位後解除)。
+    """
     stripped = text.strip()
     low = stripped.lower()
 
@@ -70,9 +75,17 @@ def handle_message(text: str, *, channel_ref: str | None = None,
     if not stripped:
         return Reply("請輸入指令(today / week / proj / todo <內容> / done <編號> / 或直接說要排的行程)。")
 
-    # 深度知識查詢:明確拒絕(內容分級,§4.1)
+    # 深度知識查詢:本機放行 → recall;Discord 拒絕(內容分級,§4.1)
     if any(stripped.startswith(p) for p in _KNOWLEDGE_PREFIXES):
-        return Reply("知識庫查詢請用本機 CLI(recall);Discord 只處理行程/待辦/提醒。")
+        if not allow_recall:
+            return Reply("知識庫查詢請用本機 CLI(recall);Discord 只處理行程/待辦/提醒。")
+        from core import recall as recall_mod              # 延遲 import
+        for p in _KNOWLEDGE_PREFIXES:
+            if stripped.startswith(p):
+                query = stripped[len(p):].strip() or stripped
+                break
+        result = recall_mod.ask(query, db=db, _api=_api)
+        return Reply(result.text)
 
     # 確定性前綴分派(零 LLM)——唯讀查詢免確認
     if low in ("today", "今天"):

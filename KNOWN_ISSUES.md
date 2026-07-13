@@ -153,3 +153,13 @@
 - 測試覆蓋依 KNOWN_ISSUES boundary 慣例:score 界外/bool 偽裝/詞彙表外 tag/
   空 tags/161 字 summary/evidence 不屬實/幻覺 path/LLM 失敗留 inbox/配額 defer,
   全部 19 tests 綠。
+
+## Audit gate 記錄(2026-07-13, part-004-slice-003 recall)
+
+探針 7 項,發現 1 個(當場修 + regression):
+
+- **R2 `fixed@004-3`** answer 的 citations 為字串(非 list)→ 曾靜默轉空放行
+  =「有主張無引用」繞過硬規則 → 改拒答(格式錯誤,原回答丟棄)
+- probed clean: R1(非 dict move → LLMError 誠實回)、R3(超長 answer 截 500)、
+  R4(超長 query 截 200)、R5(絕對路徑擋)、R7(int citation → 驗證失敗拒答)、
+  R6(筆記 body 注入面已知:防線 = 引用驗證獨立於文字,假 id 必被抓)

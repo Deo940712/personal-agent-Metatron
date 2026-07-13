@@ -26,7 +26,7 @@
 | part-002.5 | **done** (2026-07-13) | Discord bot：兩階段確認 + 提醒 DM + 白名單；210 tests 綠，真連線 QA blocked（等使用者環境） | `.beacon/parts/part-002.5/DESIGN.md` | `.beacon/done/part-002.5/` |
 | part-003 | **done** (2026-07-13) | 記憶核心完成：transcript+health+consolidate+vindex+retrieve；162 tests 綠、Phase 3 gate 通過（端到端實跑） | `.beacon/parts/part-003/DESIGN.md` | `.beacon/parts/part-003/TODO.md` |
 | part-003.5 | planned | 唯讀網頁儀表板（INTERFACES.md §5）：FastAPI+htmx、127.0.0.1、`mode=ro`、五版塊 | TBD | TBD |
-| part-004 | designed | sync skills：threads-sync vendored 接入 + curator（評分閘門/去重/入庫）+ recall（帶引用問答）；3 SLICEs；x/fb sync 為後續 | `.beacon/parts/part-004/DESIGN.md` | `.beacon/parts/part-004/TODO.md` |
+| part-004 | **done** (2026-07-13) | sync skills + curator + recall；254 tests、Phase 4 gate（mock 端到端）通過；真同步/LLM QA blocked | `.beacon/parts/part-004/DESIGN.md` | `.beacon/done/part-004/` |
 | part-004.5 | planned | 記憶強化（Membox/Mneme/Cognis 實證改進）：①主題連續性蒸餾（按天+主題分組、跨天 trace 連結）②矛盾偵測+supersede 執行（profile 注入既有、superseded_by 落地、recall 矛盾並列）③RRF 跨段融合檢索 | TBD | TBD |
 | part-005 | planned | coding_tracker：三源進度掃描（git log + .beacon/CURRENT 解析 + OpenCode sessions）→ project_update 提案 | TBD | TBD |
 | part-006 | designed | MCP server：一套工具兩傳輸——slice-1 本機 stdio（OpenCode 直問，現可做）+ slice-2 遠程 HTTP/SSE over Tailscale（VPS 後）；讀寫皆可，寫走 writer+確認 | `.beacon/parts/part-006/DESIGN.md` | `.beacon/parts/part-006/TODO.md` |

@@ -71,6 +71,21 @@ def invoke(text: str, trigger: str = "cli", *,
     """一次呼叫的完整生命週期。回傳 exit code(0 ok / 1 rejected / 2 error)。"""
     run_id = _run_start(db, trigger)
     try:
+        # 知識查詢前綴 → recall(CLI 是本機,放行;part-004)
+        stripped = text.strip()
+        recall_prefixes = ("recall", "查", "找筆記", "知識")
+        if any(stripped.startswith(p) for p in recall_prefixes):
+            from core import recall as recall_mod
+            for p in recall_prefixes:
+                if stripped.startswith(p):
+                    query = stripped[len(p):].strip() or stripped
+                    break
+            result = recall_mod.ask(query, db=db, _api=_api)
+            _run_finish(db, run_id, "ok" if result.ok else "partial",
+                        summary=f"recall steps={result.steps}")
+            reply_fn(result.text)
+            return 0 if result.ok else 1
+
         active = stm.schedule_list(db) + stm.task_list(db)
         proposal = subagents.run_schedule(text, active_items=active, db=db, _api=_api)
 

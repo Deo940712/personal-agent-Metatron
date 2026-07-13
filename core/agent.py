@@ -196,11 +196,26 @@ def job_consolidate(db: Path | None = None) -> int:
         return 2
 
 
+def job_curate(db: Path | None = None) -> int:
+    """curator 入口(part-004;委派 curate.run)。"""
+    from core import curate                     # 延遲 import
+    run_id = _run_start(db, "scheduler")
+    try:
+        stats = curate.run(db=db)
+        _run_finish(db, run_id, "ok", summary=f"curate {stats}")
+        print(f"OK: {stats}")
+        return 0
+    except Exception as e:                      # noqa: BLE001 — 頂層防線
+        _run_finish(db, run_id, "error", error=f"{type(e).__name__}: {e}")
+        print(f"ERROR: {e}")
+        return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.agent", description=__doc__)
     parser.add_argument("text", nargs="?", default=None, help="自然語言指令")
-    parser.add_argument("--job", choices=["remind", "consolidate"], default=None,
-                        help="排程 job")
+    parser.add_argument("--job", choices=["remind", "consolidate", "curate"],
+                        default=None, help="排程 job")
     parser.add_argument("--db", type=Path, default=None)
     parser.add_argument("--yes", action="store_true", help="跳過確認(測試/腳本用)")
     args = parser.parse_args(argv)
@@ -209,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         return job_remind(args.db)
     if args.job == "consolidate":
         return job_consolidate(args.db)
+    if args.job == "curate":
+        return job_curate(args.db)
     if not args.text:
         parser.error("需要自然語言指令或 --job")
     confirm = (lambda p: (print(p), True)[1]) if args.yes else _cli_confirm

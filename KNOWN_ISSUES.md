@@ -142,3 +142,14 @@
 - probed clean: D1(超大 id 解析/冒號注入擋下/空字串)、D3(白名單去重)、
   D4(負數/16進位垃圾濾除)、D5(user 白名單邏輯)、**D6(模組載入不 eager import
   discord.py——薄 adapter 解耦成立)**
+
+## Audit gate 記錄(2026-07-13, part-004-slice-002 curator)
+
+手動 QA 端到端即稽核,抓到 1 個真缺陷當場修:
+
+- **E1 `fixed@004-2`** dedupe 正本選擇依 path 字母序——誰是正本變成檔名運氣
+  (rag_dup 排在 rag_tip 前就反了)→ 改依 frontmatter date(發布時間早者為正本);
+  無 date 排最後。手動 QA 腳本驗證:正本入庫可檢索、轉發標 duplicate。
+- 測試覆蓋依 KNOWN_ISSUES boundary 慣例:score 界外/bool 偽裝/詞彙表外 tag/
+  空 tags/161 字 summary/evidence 不屬實/幻覺 path/LLM 失敗留 inbox/配額 defer,
+  全部 19 tests 綠。

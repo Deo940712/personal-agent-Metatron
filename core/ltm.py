@@ -16,8 +16,17 @@ from datetime import datetime
 from pathlib import Path
 
 # 初始受控詞彙表(INDEX.md 為執行期真相;此為初始化種子)
-INITIAL_TAGS = ["inbox", "ai-agent", "coding", "schedule", "preference",
-                "ops", "daily-log"]
+# 含 threads-sync 14 類 taxonomy(part-004 slice-002 併入)+ 系統 tags
+INITIAL_TAGS = [
+    # 系統
+    "inbox", "duplicate", "low-score", "daily-log", "preference", "ops", "schedule",
+    # threads-sync taxonomy(與 vendored classify.py PRIORITY 完全同步,14 類)
+    "local-llm", "claude", "codex-openai", "ai-agents", "rag-knowledge",
+    "automation", "devops-infra", "dev-frontend", "dev-backend", "ai-tools",
+    "learning", "career-life", "github-picks", "misc",
+    # 本專案原有
+    "ai-agent", "coding",
+]
 
 _INDEX_TEMPLATE = """# Knowledge Base — Index
 
@@ -138,6 +147,56 @@ def registry_entries(vault: Path) -> list[dict]:
         if m:
             out.append(m.groupdict())
     return out
+
+
+def update_note_frontmatter(vault: Path, rel_path: str, fm: dict) -> None:
+    """重寫一篇筆記的 frontmatter(body 不動)。curator 正式化 inbox 用。
+
+    注意:這是「更新 frontmatter 欄位」不是「改寫內容」——append-only 原則
+    管的是筆記內文與既有筆記不刪;分類欄位本來就是 curator 的職權。
+    """
+    note = read_note(vault, rel_path)
+    if note is None:
+        raise ValueError(f"cannot update unparsable note: {rel_path}")
+    lines = ["---"]
+    for k, v in fm.items():
+        if isinstance(v, list):
+            lines.append(f"{k}:")
+            lines.extend(f"  - {_yaml_scalar(item)}" for item in v)
+        else:
+            lines.append(f"{k}: {_yaml_scalar(v)}")
+    lines += ["---", "", note["body"], ""]
+    (vault / rel_path).write_text("\n".join(lines), encoding="utf-8")
+
+
+def register_existing(vault: Path, rel_path: str, *, summary: str) -> str:
+    """把既有筆記(sync 產出,無 id)登記進 registry:配 id + 寫回 frontmatter。
+
+    回傳 note_id。冪等:已有 id 且已在 registry → 直接回。
+    """
+    note = read_note(vault, rel_path)
+    if note is None:
+        raise ValueError(f"cannot register unparsable note: {rel_path}")
+    fm = note["frontmatter"]
+
+    existing_ids = {e["id"] for e in registry_entries(vault)}
+    if fm.get("id") and fm["id"] in existing_ids:
+        return fm["id"]
+
+    # 配穩定 ID:以 date(原文發布日)或今天 + 檔名 slug
+    date_str = str(fm.get("date", ""))[:10].replace("-", "") or \
+        datetime.now().strftime("%Y%m%d")
+    base = f"{date_str}-{_slugify(Path(rel_path).stem)}"
+    note_id, n = base, 1
+    while note_id in existing_ids:
+        n += 1
+        note_id = f"{base}-{n}"
+
+    fm["id"] = note_id
+    update_note_frontmatter(vault, rel_path, fm)
+    title = fm.get("title") or Path(rel_path).stem
+    _registry_append(vault, note_id, title, rel_path, summary.replace("\n", " ")[:120])
+    return note_id
 
 
 def read_note(vault: Path, rel_path: str) -> dict | None:

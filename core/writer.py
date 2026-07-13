@@ -56,6 +56,70 @@ _TABLE = {"schedule_change": "schedule", "task_change": "tasks"}
 _DONE_STATUS = {"done": "done", "cancel": "cancelled"}
 
 
+def apply_classify(p: P.Proposal, vault: Path, idx_db: Path,
+                   db: Path | None = None) -> Result:
+    """classify_note 落地(part-004):frontmatter 更新 + registry + vindex。
+
+    §3.1 規則落實:
+    - 規則 2:tags ⊆ INDEX.md 受控詞彙表(執行期真相)
+    - 規則 3:evidence 每條需在筆記原文中找到(字串比對;截斷容忍——比對前 2000 字)
+    - 規則 4:manual_tags: true 的筆記 → 拒絕(人工修改永不覆蓋)
+    """
+    from core import ltm, vindex
+
+    note = ltm.read_note(vault, p.target)
+    if note is None:
+        return _reject(db, "classify_note", f"note not found or unparsable: {p.target}",
+                       target=p.target)
+    fm = note["frontmatter"]
+
+    # 規則 4:manual_tags 守衛
+    if str(fm.get("manual_tags", "")).lower() == "true":
+        return _reject(db, "classify_note", "manual_tags=true, never override",
+                       target=p.target)
+
+    # 規則 2:受控詞彙表
+    allowed = ltm.controlled_tags(vault)
+    illegal = set(p.payload["tags"]) - allowed
+    if illegal:
+        return _reject(db, "classify_note",
+                       f"tags not in controlled vocabulary: {sorted(illegal)}",
+                       target=p.target)
+
+    # 規則 3:evidence 屬實(在原文前 2000 字內逐條比對)
+    haystack = note["body"][:2000]
+    missing = [e for e in p.evidence if e not in haystack]
+    if missing:
+        return _reject(db, "classify_note",
+                       f"evidence not found in note body: {missing[0][:50]!r}",
+                       target=p.target)
+
+    # 落地:frontmatter 更新(inbox → 正式 tags + score;low-score 走同路)
+    fm["tags"] = list(p.payload["tags"])
+    fm["score"] = float(p.payload["score"])
+    fm["summary"] = p.payload["summary"]
+    ltm.update_note_frontmatter(vault, p.target, fm)
+
+    # 高分才進 registry + vindex(低分=metadata 保留但不進檢索面)
+    import config as _config
+    promoted = fm["score"] >= _config.CURATE_SCORE_THRESHOLD
+    if promoted:
+        note_id = fm.get("id") or ltm.register_existing(vault, p.target,
+                                                        summary=p.payload["summary"])
+        try:
+            vindex.upsert(idx_db, note_id, title=fm.get("title", Path(p.target).stem),
+                          summary=p.payload["summary"], tags=fm["tags"])
+        except Exception:                        # noqa: BLE001 — 索引衍生物,不擋落地
+            stm.event_append(db, "writer", "failed",
+                             f"vindex upsert failed for {p.target} (rebuild will fix)")
+
+    stm.event_append(db, "writer", "state_change",
+                     f"classified {p.target} score={fm['score']} "
+                     f"{'promoted' if promoted else 'low-score'}", target=p.target)
+    return Result("applied", f"{p.target} score={fm['score']} "
+                             f"{'promoted' if promoted else 'kept as metadata'}")
+
+
 def _apply_change(db: Path | None, p: P.Proposal) -> Result:
     table = _TABLE[p.proposal_type]
     action = p.payload["action"]
@@ -136,8 +200,15 @@ def precheck(raw: dict | P.Proposal, db: Path | None = None) -> PrecheckResult:
 
     desc = f"{p.proposal_type}({p.payload.get('action')})"
 
-    # 規則 1:target 存在(add 例外——target 慣例為 'new')
-    if p.payload.get("action") != "add":
+    # 規則 1:target 存在
+    if p.proposal_type == "classify_note":
+        # target = vault 相對路徑(part-004);vault 由呼叫端(curate)先驗——
+        # 這裡驗格式:不得絕對路徑/不得跳脫 vault
+        if p.target.startswith(("/", "\\")) or ".." in p.target or ":" in p.target:
+            reason = f"illegal vault path: {p.target!r}"
+            _reject(db, desc, reason)
+            return PrecheckResult(False, False, None, reason=reason)
+    elif p.payload.get("action") != "add":   # schedule/task:DB rowid(add 例外='new')
         if not p.target.isdigit():
             reason = f"target must be a row id for {p.payload.get('action')}: {p.target!r}"
             _reject(db, desc, reason)

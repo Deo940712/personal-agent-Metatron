@@ -1,45 +1,49 @@
 ﻿# CURRENT
 
 Part: part-004
-Slice: slice-001
+Slice: slice-002
 Status: active
 Design authority: `.beacon/parts/part-004/DESIGN.md`
-TODO source: `.beacon/parts/part-004/TODO.md#part-004-slice-001-threads-sync-接入--skillsrunner`
+TODO source: `.beacon/parts/part-004/TODO.md#part-004-slice-002-curator前處理--llm-契約--管線`
 
 ## Goal
 
-threads-sync vendored clone 進 skills/ + 執行器 runner.py（cursors/agent_runs 整合、
-login_expired 偵測）。
+inbox 筆記 → 確定性前處理（hash/去重/欄位補齊）→ LLM 評分+分類 → writer 驗證
+→ 正式入庫（registry + vindex）；低分只留 metadata。
 
 ## Allowed Scope
 
-- [ ] `skills/threads_sync/`：clone Deo940712/threads-sync（pin commit）、VAULT_PATH 覆蓋探勘+接線
-- [ ] `skills/runner.py`：跑 1-5 步驟、exit code 捕捉、cursors + agent_runs 寫入
-- [ ] `tests/test_runner.py`：mock skill CLI 三路徑（成功/失敗/login_expired）
+- [ ] `core/curator_pre.py`：inbox 掃描、content_hash、跨源去重、§5.2 欄位補齊
+- [ ] `agents/curator.md`：評分+分類契約（閾值 4.0、配額、evidence 規則）
+- [ ] `core/curate.py`：pre → LLM 批次（≤10 篇）→ 驗證 → 落地 → 統計
+- [ ] writer：classify_note 落地（frontmatter 更新 + manual_tags 守衛 + registry + vindex）
+- [ ] INDEX 詞彙表擴充（threads-sync 14 類 + low-score）
+- [ ] `core/agent.py` 加 `--job curate`
+- [ ] pytest（mock LLM）：閘門/配額/去重/manual_tags/驗證攔截 + boundary
 
 ## Forbidden Scope
 
-- 改 threads-sync 內部邏輯（黑箱；最多 config 覆蓋）
-- curator / recall（slice-002/003）
+- FIRE 拆卡完整版（backlog-019；先 summary+tags 起步）
+- recall（slice-003）
 
 ## Files-scope
 
-skills/**, tests/test_runner.py
+core/curator_pre.py, core/curate.py, core/writer.py, core/proposals.py, agents/curator.md, core/agent.py, core/ltm.py, tests/test_curate.py
 
 ## Expected Output
 
-`python -m skills.runner threads_sync` 可跑（無 session → 優雅回報 login_expired）；
-DB1 cursors 有 last_run 記錄。
+假貼文丟 inbox → `--job curate` → 高分入 registry 可檢索、低分標 low-score；
+重複貼文合併；手動 tag 不被覆蓋。
 
 ## Verification Plan
 
-- Unit: `python -m pytest tests/test_runner.py -q`
-- Regression: `python -m pytest tests/ -q`（210 不壞）
-- Manual QA: 真同步 — blocked（Playwright session 在原機器）
+- Unit: `python -m pytest tests/test_curate.py -q`
+- Regression: `python -m pytest tests/ -q`（223 不壞）
+- Manual QA: 假貼文 3 篇（高/低分/重複）端到端目檢
 
 ## Current Blockers
 
-- 真 threads-sync 同步需原機器的 cookies/session（不 block 程式與 mock 測試）
+None
 
 ## Recovery Incident
 

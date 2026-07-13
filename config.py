@@ -32,6 +32,9 @@ LLM_MODEL_STRONG = "gpt-4o"                    # 綜合與決策(orchestrator)
 HEALTH_DECAY_PER_DAY = 0.05                    # 線性日衰減(1.0 → 0 需 20 天)
 TRASH_RETENTION_DAYS = 14                      # trash 保留期(期內被引用可復活)
 DISTILL_MIN_CONFIDENCE = 0.6                   # 蒸餾決策低於此即跳過
+CURATE_SCORE_THRESHOLD = 4.0                   # curator 評分閘門(低於=只留 metadata)
+CURATE_BATCH_SIZE = 10                         # curator 每批筆記數
+CURATE_TAG_QUOTA = 20                          # 單次 curate 每 tag 進 registry 上限(防洪水)
 EMBED_MODEL = "text-embedding-3-small"         # OpenAI 相容 /v1/embeddings
 EMBED_DIM = 1536
 EMBED_BASE_URL_ENV = "MY_AGENT_EMBED_BASE_URL" # 未設 = 同 LLM_BASE_URL

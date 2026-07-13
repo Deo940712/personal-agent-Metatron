@@ -154,10 +154,28 @@ def validate_task_change(payload: dict[str, Any]) -> None:
     _validate_change(payload, TASK_FIELDS)
 
 
+def validate_classify_note(payload: dict[str, Any]) -> None:
+    """part-004 curator:score/tags/summary(tags ⊆ 詞彙表由 writer 查 INDEX)。"""
+    score = payload.get("score")
+    if isinstance(score, bool) or not isinstance(score, (int, float)) \
+            or not (0.0 <= score <= 10.0):
+        raise ProposalError(f"score out of [0,10]: {score!r}")
+
+    tags = payload.get("tags")
+    if not isinstance(tags, list) or not tags \
+            or not all(isinstance(t, str) and t.strip() for t in tags):
+        raise ProposalError("tags must be a non-empty list of strings")
+
+    summary = payload.get("summary")
+    if not isinstance(summary, str) or not summary.strip() or len(summary) > 160:
+        raise ProposalError("summary must be non-empty and <=160 chars")
+
+
 PAYLOAD_VALIDATORS = {
     "schedule_change": validate_schedule_change,
     "task_change": validate_task_change,
-    # part-003+: classify_note / project_update / agent_note / vault_maintenance
+    "classify_note": validate_classify_note,
+    # part-004+: project_update / agent_note / vault_maintenance
 }
 
 
@@ -170,7 +188,13 @@ def validate(proposal: Proposal) -> None:
 
 
 def needs_confirmation(proposal: Proposal) -> bool:
-    """§3.2 閘門第二層:寫入類 action 需使用者確認;done 免確認。"""
+    """§3.2 閘門第二層:寫入類 action 需使用者確認;done 免確認。
+
+    classify_note 免確認:進的是 inbox 緩衝區的正式化(§3.2 自動放行層——
+    「sync 管線 inbox 寫入本來就進緩衝區」的延伸;manual_tags 守衛在 writer)。
+    """
     if proposal.proposal_type in {"schedule_change", "task_change"}:
         return proposal.payload.get("action") in CONFIRM_REQUIRED_ACTIONS
+    if proposal.proposal_type == "classify_note":
+        return False
     return True  # 未知類型保守處理(實際上 validate 已擋)

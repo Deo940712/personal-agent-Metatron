@@ -171,11 +171,30 @@ def validate_classify_note(payload: dict[str, Any]) -> None:
         raise ProposalError("summary must be non-empty and <=160 chars")
 
 
+def validate_project_update(payload: dict[str, Any]) -> None:
+    """part-005 coding_tracker:phase/blockers/next_action 型別與長度。"""
+    phase = payload.get("phase")
+    if not isinstance(phase, str) or not phase.strip() or len(phase) > 120:
+        raise ProposalError("phase must be non-empty string <=120 chars")
+
+    blockers = payload.get("blockers")
+    if not isinstance(blockers, list) or \
+            not all(isinstance(b, str) and b.strip() for b in blockers):
+        raise ProposalError("blockers must be a list of non-empty strings")
+    if len(blockers) > 10:
+        raise ProposalError("blockers list too long (>10)")
+
+    next_action = payload.get("next_action")
+    if not isinstance(next_action, str) or len(next_action) > 120:
+        raise ProposalError("next_action must be a string <=120 chars")
+
+
 PAYLOAD_VALIDATORS = {
     "schedule_change": validate_schedule_change,
     "task_change": validate_task_change,
     "classify_note": validate_classify_note,
-    # part-004+: project_update / agent_note / vault_maintenance
+    "project_update": validate_project_update,
+    # future: agent_note / vault_maintenance
 }
 
 
@@ -196,5 +215,9 @@ def needs_confirmation(proposal: Proposal) -> bool:
     if proposal.proposal_type in {"schedule_change", "task_change"}:
         return proposal.payload.get("action") in CONFIRM_REQUIRED_ACTIONS
     if proposal.proposal_type == "classify_note":
+        return False
+    if proposal.proposal_type == "project_update":
+        # 免確認(part-005 DESIGN):唯讀訊號推導的 Working State 快取,
+        # 錯了無副作用、下輪自動修正、手動 project_set 永遠優先
         return False
     return True  # 未知類型保守處理(實際上 validate 已擋)

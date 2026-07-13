@@ -120,6 +120,21 @@ def apply_classify(p: P.Proposal, vault: Path, idx_db: Path,
                              f"{'promoted' if promoted else 'kept as metadata'}")
 
 
+def apply_project_update(p: P.Proposal, db: Path | None = None) -> Result:
+    """project_update 落地(part-005):stm.project_set upsert(只更新給定欄位)。
+
+    precheck 已驗 target 是已註冊專案;此處純落地 + events 記錄。
+    """
+    stm.project_set(db, p.target,
+                    phase=p.payload["phase"],
+                    blockers=p.payload["blockers"],
+                    next_action=p.payload["next_action"])
+    stm.event_append(db, "writer", "state_change",
+                     f"project {p.target} tracked: {p.payload['phase'][:60]}",
+                     target=p.target)
+    return Result("applied", f"project {p.target} updated")
+
+
 def _apply_change(db: Path | None, p: P.Proposal) -> Result:
     table = _TABLE[p.proposal_type]
     action = p.payload["action"]
@@ -206,6 +221,19 @@ def precheck(raw: dict | P.Proposal, db: Path | None = None) -> PrecheckResult:
         # 這裡驗格式:不得絕對路徑/不得跳脫 vault
         if p.target.startswith(("/", "\\")) or ".." in p.target or ":" in p.target:
             reason = f"illegal vault path: {p.target!r}"
+            _reject(db, desc, reason)
+            return PrecheckResult(False, False, None, reason=reason)
+    elif p.proposal_type == "project_update":
+        # target = projects.name(part-005);必須已註冊(不自動建專案——
+        # 防 LLM 幻覺專案名進表)
+        con = stm.connect(db)
+        try:
+            exists = con.execute(
+                "SELECT 1 FROM projects WHERE name = ?", (p.target,)).fetchone()
+        finally:
+            con.close()
+        if not exists:
+            reason = f"project not registered: {p.target!r}"
             _reject(db, desc, reason)
             return PrecheckResult(False, False, None, reason=reason)
     elif p.payload.get("action") != "add":   # schedule/task:DB rowid(add 例外='new')

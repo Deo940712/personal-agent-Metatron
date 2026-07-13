@@ -226,10 +226,25 @@ def job_curate(db: Path | None = None) -> int:
         return 2
 
 
+def job_track(db: Path | None = None) -> int:
+    """coding_tracker 入口(part-005;委派 track.run)。"""
+    from core import track                      # 延遲 import
+    run_id = _run_start(db, "scheduler")
+    try:
+        stats = track.run(db=db)
+        _run_finish(db, run_id, "ok", summary=f"track {stats}")
+        print(f"OK: {stats}")
+        return 0
+    except Exception as e:                      # noqa: BLE001 — 頂層防線
+        _run_finish(db, run_id, "error", error=f"{type(e).__name__}: {e}")
+        print(f"ERROR: {e}")
+        return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.agent", description=__doc__)
     parser.add_argument("text", nargs="?", default=None, help="自然語言指令")
-    parser.add_argument("--job", choices=["remind", "consolidate", "curate"],
+    parser.add_argument("--job", choices=["remind", "consolidate", "curate", "track"],
                         default=None, help="排程 job")
     parser.add_argument("--db", type=Path, default=None)
     parser.add_argument("--yes", action="store_true", help="跳過確認(測試/腳本用)")
@@ -241,6 +256,8 @@ def main(argv: list[str] | None = None) -> int:
         return job_consolidate(args.db)
     if args.job == "curate":
         return job_curate(args.db)
+    if args.job == "track":
+        return job_track(args.db)
     if not args.text:
         parser.error("需要自然語言指令或 --job")
     confirm = (lambda p: (print(p), True)[1]) if args.yes else _cli_confirm

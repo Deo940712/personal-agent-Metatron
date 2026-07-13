@@ -106,16 +106,16 @@ def test_stage1_index_first_hits_registry(env):
 
 def test_stage2_fts_when_index_misses(env):
     add_note(env, "標題甲", "摘要沒有那個詞", tags=("coding",))
-    # registry 一行(title+summary)不含 'coding' 中文比對 → 落到 FTS tags 欄位
+    # registry 一行(title+summary)不含 'coding' → 靠 FTS tags 欄位進融合池
     hits = retrieve.search(env["vault"], env["idx"], "coding")
-    assert hits and hits[0].stage == "fts"
+    assert hits and hits[0].stage == "rrf"                  # part-004.5:融合結果
 
 
 def test_stage3_vec_when_fts_misses(env):
     add_note(env, "完全無關標題", "完全無關摘要", vector=vec(0.1))
     hits = retrieve.search(env["vault"], env["idx"], "語意查詢",
                            embed_fn=lambda q: vec(0.11))
-    assert hits and hits[0].stage == "vec"
+    assert hits and hits[0].stage == "rrf"                  # 向量候選經融合輸出
 
 
 def test_all_miss_returns_empty(env):
@@ -173,3 +173,83 @@ def test_rehydrate_note_without_sources(env):
     hits = retrieve.search(env["vault"], env["idx"], "無來源")
     assert retrieve.rehydrate(env["vault"], hits[0].path,
                               transcript_dir=env["tdir"]) == []
+
+
+# ── part-004.5-slice-003:RRF 融合(Cognis,backlog-024)──────────────────
+
+def H(nid, stage="fts"):
+    return retrieve.Hit(nid, f"semantic/{nid}.md", 0.0, stage)
+
+
+def test_rrf_formula_hand_computed():
+    """手算驗證:k=60。A 在兩清單各 rank1 → 2/61;B rank2+rank1 → 1/62+1/61。"""
+    fused = retrieve._rrf_fuse([[H("A"), H("B")], [H("B"), H("A")]], k=60)
+    scores = {h.note_id: h.score for h in fused}
+    assert scores["A"] == pytest.approx(1 / 61 + 1 / 62)
+    assert scores["B"] == pytest.approx(1 / 61 + 1 / 62)
+    # 同分 → id 字典序穩定
+    assert [h.note_id for h in fused] == ["A", "B"]
+
+
+def test_rrf_cross_list_consensus_wins():
+    """兩清單都出現的候選 > 單清單第一名。"""
+    fused = retrieve._rrf_fuse([[H("solo"), H("both")], [H("both")]], k=60)
+    assert fused[0].note_id == "both"                       # 1/62+1/61 > 1/61
+    assert fused[0].stage == "rrf"
+
+
+def test_rrf_empty_lists():
+    assert retrieve._rrf_fuse([[], [], []]) == []
+
+
+def test_strong_index_hit_short_circuits_no_embed_call(env):
+    """≥2 token 命中 → 短路:embed_fn 不被呼叫(零成本路徑保留)。"""
+    add_note(env, "向量索引選型", "sqlite-vec 定案結論")
+    called = []
+    def spy_embed(q):
+        called.append(1)
+        return vec(0.1)
+    hits = retrieve.search(env["vault"], env["idx"], "向量索引 sqlite-vec 定案",
+                           embed_fn=spy_embed)
+    assert hits and hits[0].stage == "index"                # 短路,非 rrf
+    assert called == []                                     # 未打 embedding
+
+
+def test_weak_index_goes_through_fusion(env):
+    """單 token 弱命中(多 token 查詢只中 1)→ 進融合,不短路。"""
+    add_note(env, "向量筆記", "只提到向量一詞")
+    hits = retrieve.search(env["vault"], env["idx"], "向量 完全無關詞彙")
+    assert hits and hits[0].stage == "rrf"
+
+
+def test_single_token_query_full_hit_short_circuits(env):
+    """單 token 查詢:全部 token(=1)命中也算強命中。"""
+    add_note(env, "sqlite 筆記", "關於 sqlite 的內容")
+    hits = retrieve.search(env["vault"], env["idx"], "sqlite")
+    assert hits and hits[0].stage == "index"
+
+
+def test_fusion_result_heals_sources(env):
+    """回血閉環對融合結果生效(非短路路徑)。"""
+    from core import health
+    eid = stm.event_append(env["db"], "user", "decision", "融合回血測試")
+    con = stm.connect(env["db"])
+    created = con.execute("SELECT created_at FROM events").fetchone()[0]
+    con.close()
+    t = created + 21 * 86_400
+    health.decay(env["db"], now_ts=t)
+    health.to_trash(env["db"], now_ts=t, transcript_dir=env["tdir"])
+
+    nid = ltm.write_note(env["vault"], "semantic", title="標題甲",
+                         body="內文", frontmatter={
+                             "source": "consolidation", "tags": ["coding"],
+                             "summary": "摘要沒有那個詞",
+                             "source_ids": [f"evt:{eid}"]}, ts=TS)
+    vindex.upsert(env["idx"], nid, title="標題甲", summary="摘要沒有那個詞",
+                  tags=["coding"])
+    hits = retrieve.search(env["vault"], env["idx"], "coding", db=env["db"])
+    assert hits and hits[0].stage == "rrf"
+    con = stm.connect(env["db"])
+    state = con.execute("SELECT state, health FROM events WHERE id=?", (eid,)).fetchone()
+    con.close()
+    assert state == ("alive", 1.0)                          # 融合命中也回血

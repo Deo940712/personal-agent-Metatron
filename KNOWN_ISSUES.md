@@ -174,3 +174,12 @@
   整組拒絕。
 - probed clean: U1(自指/清單外 id 拒絕)、U3(int/bool 型別拒絕)、
   U4(registry 有 id 但檔案被手刪 → False 不 crash)
+
+## Audit gate 記錄(2026-07-13, part-004.5-slice-003 RRF)
+
+探針 5 項全 clean:
+
+- V1/V2:stage 值('fts'/'vec'→'rrf')只有 recall 工具輸出資訊性引用,無邏輯分支
+- V3:單 token 查詢走強命中短路(score=token數),融合路徑正確分離
+- V4:中文連續段=1 token 的語意確認('向量索引'是 1 token,強命中需 ≥2 段)
+- V5:_strong_index_hits 全掃後排序,無 early-break 漏筆記

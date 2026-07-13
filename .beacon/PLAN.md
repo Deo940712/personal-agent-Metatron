@@ -27,7 +27,7 @@
 | part-003 | **done** (2026-07-13) | 記憶核心完成：transcript+health+consolidate+vindex+retrieve；162 tests 綠、Phase 3 gate 通過（端到端實跑） | `.beacon/parts/part-003/DESIGN.md` | `.beacon/parts/part-003/TODO.md` |
 | part-003.5 | planned | 唯讀網頁儀表板（INTERFACES.md §5）：FastAPI+htmx、127.0.0.1、`mode=ro`、五版塊 | TBD | TBD |
 | part-004 | **done** (2026-07-13) | sync skills + curator + recall；254 tests、Phase 4 gate（mock 端到端）通過；真同步/LLM QA blocked | `.beacon/parts/part-004/DESIGN.md` | `.beacon/done/part-004/` |
-| part-004.5 | designed | 記憶強化：主題連續性蒸餾(Membox)+ 矛盾偵測/supersede(Mneme)+ RRF跨段融合(Cognis)；3 SLICEs | `.beacon/parts/part-004.5/DESIGN.md` | `.beacon/parts/part-004.5/TODO.md` |
+| part-004.5 | **done** (2026-07-13) | 記憶強化：Membox 主題trace + Mneme supersede + Cognis RRF；280 tests、Phase 4.5 gate 通過 | `.beacon/parts/part-004.5/DESIGN.md` | `.beacon/done/part-004.5/` |
 | part-005 | planned | coding_tracker：三源進度掃描（git log + .beacon/CURRENT 解析 + OpenCode sessions）→ project_update 提案 | TBD | TBD |
 | part-006 | designed | MCP server：一套工具兩傳輸——slice-1 本機 stdio（OpenCode 直問，現可做）+ slice-2 遠程 HTTP/SSE over Tailscale（VPS 後）；讀寫皆可，寫走 writer+確認 | `.beacon/parts/part-006/DESIGN.md` | `.beacon/parts/part-006/TODO.md` |
 

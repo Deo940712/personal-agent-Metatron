@@ -1,49 +1,20 @@
 ﻿# CURRENT
 
-Part: part-004.5
-Slice: slice-002
-Status: active
-Design authority: `.beacon/parts/part-004.5/DESIGN.md`
-TODO source: `.beacon/parts/part-004.5/TODO.md#part-0045-slice-002-矛盾偵測--supersede-執行mneme`
+Status: planning-only
 
-## Goal
+part-004.5 完成並歸檔（.beacon/done/part-004.5/，Phase 4.5 gate 通過）。
+記憶強化三項全落地：主題 trace / supersede 雙側保留 / RRF 融合。280 tests。
 
-preference 蒸餾前注入既有 profile；LLM 可輸出 supersedes；落地補 superseded_by；
-recall 契約查詢邏輯。
+## 待使用者動作（累積四批真 QA，不 block）
 
-## Allowed Scope
+1. `MY_AGENT_LLM_API_KEY` → 真 LLM/embedding QA
+2. Discord token + user id → 真 Discord QA
+3. threads-sync Playwright session → 真同步 QA
 
-- [ ] `agents/consolidator.md`：preference 蒸餾輸入注入既有 profile INDEX；
-      輸出可選 `supersedes` 欄位 + few-shot（矛盾情境）
-- [ ] `core/consolidate.py`：supersedes 驗證（存在性+非已 superseded）
-- [ ] `core/ltm.py` 或 `core/writer.py`：`mark_superseded(vault, old_id, new_id)`
-- [ ] `agents/recall.md`：落地「查 superseded_by，優先引用新版，矛盾並列」規則
-- [ ] `core/recall.py`：read_note 工具結果附帶 superseded_by 提示（若有）
-- [ ] pytest：supersede 落地、驗證攔截（指不存在/已被 superseded 的 id）、
-      recall 讀到 superseded_by 的行為
+## 下一步選項（PART 完成 = 自然暫停點）
 
-## Forbidden Scope
+- **part-006 slice-1 stdio MCP**：遠端開發迴圈（dev_status/directive 佇列）
+- part-005 coding_tracker（octools 會隨 part-006 提前落地一半）
+- part-003.5 唯讀儀表板
 
-- RRF（slice-003）
-
-## Files-scope
-
-agents/consolidator.md, agents/recall.md, core/consolidate.py, core/ltm.py, core/writer.py, core/recall.py, tests/test_consolidate.py, tests/test_recall.py
-
-## Expected Output
-
-蒸餾出「偏好改變」的新事實 → 舊 profile 筆記被標記 superseded_by，不刪；
-recall 讀到會提醒有更新版。
-
-## Verification Plan
-
-- Unit: `python -m pytest tests/test_consolidate.py tests/test_recall.py -q`
-- Regression: `python -m pytest tests/ -q`（262 不壞）
-
-## Current Blockers
-
-None
-
-## Recovery Incident
-
-None
+在 DESIGN 建立並 promote SLICE 前，無可執行 SLICE。

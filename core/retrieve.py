@@ -1,8 +1,11 @@
-"""四段級聯檢索(docs/MEMORY-zh.md §6;ARCHITECTURE §6.4)。
+"""檢索(docs/MEMORY-zh.md §6;ARCHITECTURE §6.4;part-004.5 RRF 融合)。
 
 ① index-first:INDEX registry 一行描述比對(零成本、可解釋)
+   ——強命中(≥2 token)仍短路,保留零成本路徑
 ② FTS5:trigram 全文(中文 ≥3 字 / LIKE 降級,零 embedding 成本)
 ③ 向量 KNN:sqlite-vec(語意「換句話說」,一次 embed 呼叫)
+   ②③ 與弱 index 候選經 RRF(Reciprocal Rank Fusion, k=60)融合排序
+   (backlog-024,Cognis/Mneme 標配——取代「前段命中即返回」)
 ④ rehydrate:沿 source_ids 讀 transcript 原文(要確切數字/名字時)
 
 命中閉環:任一段命中 → health.on_hit(來源 events)——常被問到的記憶衰減變慢。
@@ -18,12 +21,15 @@ from pathlib import Path
 from core import health, ltm, transcript, vindex
 
 
+RRF_K = 60    # RRF 標準常數(Cormack et al.;Cognis/Mneme 同值)
+
+
 @dataclass
 class Hit:
     note_id: str
     path: str
-    score: float      # 各段語意不同:index/fts-like=0、fts-match=bm25(越小越好)、vec=distance
-    stage: str        # 'index' | 'fts' | 'vec'
+    score: float      # 融合後 = RRF 分數(越大越好);短路路徑 = 命中 token 數
+    stage: str        # 'index' | 'fts' | 'vec' | 'rrf'
 
 
 def _tokens(query: str) -> list[str]:
@@ -31,19 +37,63 @@ def _tokens(query: str) -> list[str]:
     return [t for t in re.findall(r"[\u4e00-\u9fff]{2,}|[a-zA-Z0-9]{2,}", query)]
 
 
+def _rrf_fuse(candidate_lists: list[list[Hit]], k: int = RRF_K) -> list[Hit]:
+    """Reciprocal Rank Fusion:每清單依名次給 1/(k+rank),同 note_id 跨清單加總。
+
+    純函數(backlog-024)。輸入清單各自已按該段的優先序排好(index 0 = rank 1)。
+    輸出按融合分數降冪;stage 標 'rrf',score = 融合分數。
+    """
+    scores: dict[str, float] = {}
+    best_hit: dict[str, Hit] = {}
+    for hits in candidate_lists:
+        for rank, hit in enumerate(hits, start=1):
+            scores[hit.note_id] = scores.get(hit.note_id, 0.0) + 1.0 / (k + rank)
+            if hit.note_id not in best_hit:
+                best_hit[hit.note_id] = hit
+    fused = [Hit(nid, best_hit[nid].path, score, "rrf")
+             for nid, score in scores.items()]
+    fused.sort(key=lambda h: (-h.score, h.note_id))   # 分數同 → id 穩定排序
+    return fused
+
+
+def _strong_index_hits(vault: Path, query: str, limit: int) -> list[Hit]:
+    """強命中:≥2 個 token 命中同一筆記 → 短路(零 FTS/embedding 成本)。
+    單 token 查詢時,全部 token(=1)命中也算強。"""
+    toks = _tokens(query)
+    if not toks:
+        return []
+    need = min(2, len(toks))
+    out = []
+    for e in ltm.registry_entries(vault):
+        haystack = f"{e['title']} {e['summary']}"
+        n_hit = sum(1 for t in toks if t in haystack)
+        if n_hit >= need:
+            out.append(Hit(e["id"], e["path"], float(n_hit), "index"))
+    out.sort(key=lambda h: (-h.score, h.note_id))
+    return out[:limit]
+
+
 def search(vault: Path, idx_db: Path, query: str, *,
            embed_fn=None, limit: int = 5,
            db: Path | None = None) -> list[Hit]:
-    """級聯:前段命中即返回(不疊加後段);全 miss 回空。
+    """RRF 融合檢索(part-004.5):強 index 命中短路;否則三段候選融合。
 
     embed_fn: (text) -> list[float]。None = 跳過向量段(無 embedding 能力時)。
     db: 提供時,命中筆記的 source_ids 中 evt: 事件會觸發回血。
     """
-    hits = _stage_index(vault, query, limit)
-    if not hits:
-        hits = _stage_fts(vault, idx_db, query, limit)
-    if not hits and embed_fn is not None:
-        hits = _stage_vec(vault, idx_db, query, embed_fn, limit)
+    # 零成本短路:多 token 強命中不需要融合
+    strong = _strong_index_hits(vault, query, limit)
+    if strong:
+        if db is not None:
+            _heal_sources(vault, strong, db)
+        return strong
+
+    # 三段並行取候選(池放大 2 倍)→ RRF 融合
+    pool = limit * 2
+    idx_hits = _stage_index(vault, query, pool)
+    fts_hits = _stage_fts(vault, idx_db, query, pool)
+    vec_hits = _stage_vec(vault, idx_db, query, embed_fn, pool) if embed_fn else []
+    hits = _rrf_fuse([idx_hits, fts_hits, vec_hits])[:limit]
 
     if hits and db is not None:
         _heal_sources(vault, hits, db)

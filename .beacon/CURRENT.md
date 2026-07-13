@@ -1,20 +1,46 @@
-﻿# CURRENT
+# CURRENT
 
-Status: planning-only
+Part: part-005
+Slice: slice-001
+Status: active
+Design authority: `.beacon/parts/part-005/DESIGN.md`
+TODO source: `.beacon/parts/part-005/TODO.md#part-005-slice-001-octools--scanners三源唯讀掃描`
 
-part-004.5 完成並歸檔（.beacon/done/part-004.5/，Phase 4.5 gate 通過）。
-記憶強化三項全落地：主題 trace / supersede 雙側保留 / RRF 融合。280 tests。
+## Goal
 
-## 待使用者動作（累積四批真 QA，不 block）
+三個確定性掃描器(git/beacon/opencode),全唯讀、全容錯。
 
-1. `MY_AGENT_LLM_API_KEY` → 真 LLM/embedding QA
-2. Discord token + user id → 真 Discord QA
-3. threads-sync Playwright session → 真同步 QA
+## Allowed Scope
 
-## 下一步選項（PART 完成 = 自然暫停點）
+- [ ] `core/octools.py`:recent_sessions(mode=ro、毫秒轉秒、directory 正規化)、
+      session_todos(完成率)、schema 容錯
+- [ ] `core/scanners.py`:git_scan(subprocess 容錯、無 upstream 容忍)、
+      beacon_scan(CURRENT 兩形態 parser、缺 .beacon → None)
+- [ ] `tests/test_scanners.py`:tmp git repo 實測、假 opencode.db(同 schema)、
+      假 CURRENT.md、boundary(非 git 目錄/壞 db/空表)
 
-- **part-006 slice-1 stdio MCP**：遠端開發迴圈（dev_status/directive 佇列）
-- part-005 coding_tracker（octools 會隨 part-006 提前落地一半）
-- part-003.5 唯讀儀表板
+## Forbidden Scope
 
-在 DESIGN 建立並 promote SLICE 前，無可執行 SLICE。
+- LLM / track 管線(slice-002);MCP(part-006)
+- 寫入任何被掃描的目標(全唯讀鐵律)
+
+## Files-scope
+
+core/octools.py, core/scanners.py, tests/test_scanners.py
+
+## Expected Output
+
+對本專案跑三掃描器回真實資料;壞輸入(非 git 目錄/壞 db/缺 .beacon)不 crash。
+
+## Verification Plan
+
+- Unit: `python -m pytest tests/test_scanners.py -q`
+- Regression: `python -m pytest tests/ -q`(280 不壞)
+
+## Current Blockers
+
+None
+
+## Recovery Incident
+
+None

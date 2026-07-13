@@ -139,6 +139,39 @@ def test_r2_citations_not_list_rejected(env):
     assert not r.ok and "格式錯誤" in r.text
 
 
+# ── part-004.5-slice-002:superseded_by 提示(Mneme)────────────────────
+
+def test_read_note_surfaces_superseded_by(env):
+    """讀到被取代的筆記 → 工具結果帶 _superseded_by_note 提示。"""
+    old_id = add_note(env, "舊偏好", "回覆用繁中", "使用者要求回覆一律使用繁體中文")
+    ltm.mark_superseded(env["vault"], old_id, "20260710-new-pref")
+
+    captured = {}
+    def spy_api(s, u, m, j):
+        # 第二輪時 u 會含工具結果;抓下來驗證
+        captured["u"] = u
+        if "read_note" not in u:
+            return json.dumps({"tool": "read_note",
+                               "path": f"semantic/{old_id}.md"})
+        return json.dumps({"tool": "answer", "text": "找不到。", "citations": []})
+
+    recall.ask("舊偏好?", **kw(env), _api=spy_api)
+    assert "_superseded_by_note" in captured["u"]
+    assert "20260710-new-pref" in captured["u"]
+
+
+def test_read_note_no_hint_when_not_superseded(env):
+    nid = add_note(env, "現行偏好", "s", "b")
+    captured = {}
+    def spy_api(s, u, m, j):
+        captured["u"] = u
+        if "read_note" not in u:
+            return json.dumps({"tool": "read_note", "path": f"semantic/{nid}.md"})
+        return json.dumps({"tool": "answer", "text": "找不到。", "citations": []})
+    recall.ask("偏好?", **kw(env), _api=spy_api)
+    assert "_superseded_by_note" not in captured["u"]
+
+
 # ── 回血接線(search 命中 → health.on_hit 經 retrieve)────────────────
 
 def test_search_heals_source_events(env):

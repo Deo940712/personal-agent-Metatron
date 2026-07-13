@@ -81,7 +81,43 @@ def _validate_group(group: dict, batch_ids: set[int],
     topic = group.get("topic")
     if not isinstance(topic, str) or not topic.strip() or len(topic) > 30:
         return "topic must be a non-empty string <=30 chars"
+
+    # 第七條(backlog-023, Mneme):supersedes 選填;若給則必須是真實存在
+    # 且尚未被 superseded 的 profile 筆記 id(呼叫端傳入 existing_profile_ids)
     return None
+
+
+def _validate_supersedes(group: dict, existing_profile_ids: set[str]) -> str | None:
+    """獨立於 _validate_group(需要 vault 查詢,呼叫端先做)。回 None=合格。
+
+    audit U2:supersedes 只允許 preference kind——episodic 帶 supersedes 曾繞過
+    驗證直接執行 mark_superseded(驗證與執行不對稱漏洞)。
+    """
+    supersedes = group.get("supersedes")
+    if supersedes is None:
+        return None
+    if group.get("kind") != "preference":
+        return f"supersedes only allowed on preference kind, got {group.get('kind')!r}"
+    if not isinstance(supersedes, str) or not supersedes.strip():
+        return "supersedes must be a non-empty string if present"
+    if supersedes not in existing_profile_ids:
+        return f"supersedes target not found or already superseded: {supersedes!r}"
+    return None
+
+
+def _existing_profile_index(vault: Path) -> tuple[str, set[str]]:
+    """既有 agent/profile/ 筆記的 INDEX 一行描述(漸進揭露,§4.2)+ id 集合
+    (供 supersedes 驗證;已被 superseded 的排除——不能疊加 supersede 舊鏈)。"""
+    lines, ids = [], set()
+    for e in ltm.registry_entries(vault):
+        if not e["path"].startswith("agent/profile/"):
+            continue
+        note = ltm.read_note(vault, e["path"])
+        if note is None or note["frontmatter"].get("superseded_by"):
+            continue
+        lines.append(f"- `{e['id']}` — {e['title']} — {e['summary']}")
+        ids.add(e["id"])
+    return "\n".join(lines), ids
 
 
 def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
@@ -91,7 +127,12 @@ def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
     allowed = ltm.controlled_tags(vault)
     listing = "\n".join(
         f"- id={e['id']} [{e['actor']}/{e['action']}] {e['summary']}" for e in batch)
-    user = f"允許的 tags: {', '.join(sorted(allowed))}\n事件({day}):\n{listing}"
+    profile_index, existing_profile_ids = _existing_profile_index(vault)
+    parts = [f"允許的 tags: {', '.join(sorted(allowed))}"]
+    if profile_index:
+        parts.append(f"既有偏好清單:\n{profile_index}")
+    parts.append(f"事件({day}):\n{listing}")
+    user = "\n".join(parts)
 
     system = subagents.load_contract("consolidator")
     result = llm.complete_json(system, user, db=db, purpose="consolidate", _api=_api)
@@ -106,25 +147,40 @@ def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
         return 0, []
     for group in groups:
         reason = _validate_group(group, batch_ids, allowed)
+        if reason is None:
+            # audit U2:所有 kind 都過 supersedes 驗證(episodic 帶 supersedes 會被拒)
+            reason = _validate_supersedes(group, existing_profile_ids)
         if reason:
             stm.event_append(db, "consolidator", "proposal_rejected",
                              f"distill group rejected: {reason}")
             continue  # 逐組跳過,不整批失敗
         source_ids = [f"evt:{i}" for i in group["source_event_ids"]]
+        frontmatter = {
+            "source": "consolidation",
+            "period": day,
+            "topic": group["topic"],
+            "source_ids": source_ids,
+            "distilled_at": datetime.fromtimestamp(stm.now()).strftime("%Y-%m-%d %H:%M"),
+            "model": config.LLM_MODEL_CHEAP,
+            "tags": group["tags"],
+            "summary": group["summary"][:120],
+        }
+        supersedes = group.get("supersedes")
+        if supersedes:
+            frontmatter["supersedes"] = supersedes
         note_id = ltm.write_note(
             vault, _KIND_SUBDIR[group["kind"]],
             title=group["title"], body=group["summary"],
-            frontmatter={
-                "source": "consolidation",
-                "period": day,
-                "topic": group["topic"],
-                "source_ids": source_ids,
-                "distilled_at": datetime.fromtimestamp(stm.now()).strftime("%Y-%m-%d %H:%M"),
-                "model": config.LLM_MODEL_CHEAP,
-                "tags": group["tags"],
-                "summary": group["summary"][:120],
-            },
+            frontmatter=frontmatter,
             ts=batch[0]["ts"])
+        if supersedes:
+            # 雙側保留(Mneme):新筆記已落地;舊筆記補 superseded_by,不刪不改內容
+            marked = ltm.mark_superseded(vault, supersedes, note_id)
+            if marked:
+                existing_profile_ids.discard(supersedes)  # 同批次後續 group 不可再指它
+            stm.event_append(db, "consolidator", "state_change",
+                             f"{'superseded' if marked else 'failed to mark superseded'} "
+                             f"{supersedes} by {note_id}", target=note_id)
         # 管線尾:進檢索索引(FTS 立即可查;向量由 rebuild/後續補)
         try:
             vindex.upsert(config.INDEX_DB, note_id, title=group["title"],

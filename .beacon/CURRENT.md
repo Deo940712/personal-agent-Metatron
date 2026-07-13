@@ -1,38 +1,44 @@
 ﻿# CURRENT
 
 Part: part-004.5
-Slice: slice-001
+Slice: slice-002
 Status: active
 Design authority: `.beacon/parts/part-004.5/DESIGN.md`
-TODO source: `.beacon/parts/part-004.5/TODO.md#part-0045-slice-001-主題連續性蒸餾membox`
+TODO source: `.beacon/parts/part-004.5/TODO.md#part-0045-slice-002-矛盾偵測--supersede-執行mneme`
 
 ## Goal
 
-蒸餾契約加 topic 欄位；consolidate 收尾自動連結近 30 天同主題筆記（Membox 輕量版）。
+preference 蒸餾前注入既有 profile；LLM 可輸出 supersedes；落地補 superseded_by；
+recall 契約查詢邏輯。
 
 ## Allowed Scope
 
-- [ ] `agents/consolidator.md`：輸出 schema 加 `topic`（必填,<=30字）+ few-shot
-- [ ] `core/consolidate.py`：`_validate_group` 第六條（topic）；寫筆記後掃近 30
-      天同 topic episodic 筆記，雙向補 related
-- [ ] pytest：topic 驗證 boundary；連結產生；無同主題時不連結；30 天窗口邊界
+- [ ] `agents/consolidator.md`：preference 蒸餾輸入注入既有 profile INDEX；
+      輸出可選 `supersedes` 欄位 + few-shot（矛盾情境）
+- [ ] `core/consolidate.py`：supersedes 驗證（存在性+非已 superseded）
+- [ ] `core/ltm.py` 或 `core/writer.py`：`mark_superseded(vault, old_id, new_id)`
+- [ ] `agents/recall.md`：落地「查 superseded_by，優先引用新版，矛盾並列」規則
+- [ ] `core/recall.py`：read_note 工具結果附帶 superseded_by 提示（若有）
+- [ ] pytest：supersede 落地、驗證攔截（指不存在/已被 superseded 的 id）、
+      recall 讀到 superseded_by 的行為
 
 ## Forbidden Scope
 
-- supersede（slice-002）；RRF（slice-003）
+- RRF（slice-003）
 
 ## Files-scope
 
-agents/consolidator.md, core/consolidate.py, tests/test_consolidate.py
+agents/consolidator.md, agents/recall.md, core/consolidate.py, core/ltm.py, core/writer.py, core/recall.py, tests/test_consolidate.py, tests/test_recall.py
 
 ## Expected Output
 
-兩天各蒸餾出同主題筆記 → 自動產生雙向 related 連結。
+蒸餾出「偏好改變」的新事實 → 舊 profile 筆記被標記 superseded_by，不刪；
+recall 讀到會提醒有更新版。
 
 ## Verification Plan
 
-- Unit: `python -m pytest tests/test_consolidate.py -q`
-- Regression: `python -m pytest tests/ -q`（254 不壞）
+- Unit: `python -m pytest tests/test_consolidate.py tests/test_recall.py -q`
+- Regression: `python -m pytest tests/ -q`（262 不壞）
 
 ## Current Blockers
 

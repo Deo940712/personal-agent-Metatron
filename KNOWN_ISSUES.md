@@ -163,3 +163,14 @@
 - probed clean: R1(非 dict move → LLMError 誠實回)、R3(超長 answer 截 500)、
   R4(超長 query 截 200)、R5(絕對路徑擋)、R7(int citation → 驗證失敗拒答)、
   R6(筆記 body 注入面已知:防線 = 引用驗證獨立於文字,假 id 必被抓)
+
+## Audit gate 記錄(2026-07-13, part-004.5-slice-002 supersede)
+
+探針 4 項,發現 1 個真漏洞(當場修 + regression):
+
+- **U2 `fixed@004.5-2`** episodic kind 帶 supersedes 繞過驗證直接執行
+  mark_superseded(驗證只掛在 preference 分支,執行卻無條件跑——驗證與執行
+  不對稱)→ _validate_supersedes 對所有 kind 執行,episodic 帶 supersedes
+  整組拒絕。
+- probed clean: U1(自指/清單外 id 拒絕)、U3(int/bool 型別拒絕)、
+  U4(registry 有 id 但檔案被手刪 → False 不 crash)

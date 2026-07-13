@@ -32,7 +32,7 @@ Done gate:
 
 ### part-004.5-slice-002: 矛盾偵測 + supersede 執行(Mneme)
 
-Status: planned
+Status: done (2026-07-13)
 
 Goal: preference 蒸餾前注入既有 profile;LLM 可輸出 supersedes;落地補
 superseded_by;recall 契約查詢邏輯。

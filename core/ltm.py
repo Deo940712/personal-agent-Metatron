@@ -199,6 +199,24 @@ def register_existing(vault: Path, rel_path: str, *, summary: str) -> str:
     return note_id
 
 
+def mark_superseded(vault: Path, old_id: str, new_id: str) -> bool:
+    """舊筆記補 superseded_by(part-004.5;Mneme 雙側保留:不刪、不改內容)。
+
+    回傳是否成功(old_id 存在且尚未被 superseded——同一筆記不重複標記)。
+    找筆記路徑走 registry(id → path);找不到或已標記過 → False,呼叫端據此拒絕。
+    """
+    entry = next((e for e in registry_entries(vault) if e["id"] == old_id), None)
+    if entry is None:
+        return False
+    note = read_note(vault, entry["path"])
+    if note is None or note["frontmatter"].get("superseded_by"):
+        return False
+    fm = note["frontmatter"]
+    fm["superseded_by"] = new_id
+    update_note_frontmatter(vault, entry["path"], fm)
+    return True
+
+
 def read_note(vault: Path, rel_path: str) -> dict | None:
     """讀一篇筆記 → {frontmatter, body}。壞 frontmatter → None(不炸全庫)。"""
     path = vault / rel_path

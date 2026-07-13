@@ -342,3 +342,118 @@ def test_link_same_topic_outside_window_not_linked():
     linked = consolidate._link_same_topic(vault, "new-note", "episodic/new-note.md",
                                           "架構設計", "2026-06-15", None)  # >30天差
     assert linked == 0
+
+
+# ── part-004.5-slice-002:矛盾偵測 + supersede(Mneme,backlog-023)──────
+
+def profile_env(tmp_path):
+    """既有一篇 profile 偏好筆記 + 一顆到期 event(偏好改變)。"""
+    db = tmp_path / "state.db"
+    stm.init(db)
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    tdir = tmp_path / "transcript"
+
+    old_id = ltm.write_note(vault, "agent/profile", title="回覆語言偏好",
+                            body="使用者要求回覆一律使用繁體中文。",
+                            frontmatter={"source": "consolidation", "period": "2026-06-01",
+                                         "topic": "溝通偏好", "tags": ["preference"],
+                                         "summary": "回覆用繁中"}, ts=1_748_000_000)
+
+    eid = stm.event_append(db, "user", "decision", "之後回覆改用英文")
+    con = stm.connect(db)
+    created = con.execute("SELECT created_at FROM events WHERE id=?", (eid,)).fetchone()[0]
+    con.close()
+    t = created + 21 * DAY
+    health.decay(db, now_ts=t)
+    health.to_trash(db, now_ts=t, transcript_dir=tdir)
+    now = t + config.TRASH_RETENTION_DAYS * DAY
+    return {"db": db, "vault": vault, "tdir": tdir, "eid": eid,
+            "old_id": old_id, "now": now}
+
+
+def supersede_llm(eid, supersedes):
+    return lambda s, u, m, j: json.dumps({"groups": [{
+        "kind": "preference", "title": "回覆語言偏好(更新)", "topic": "溝通偏好",
+        "summary": "使用者更新偏好:回覆改用英文。", "tags": ["preference"],
+        "source_event_ids": [eid], "confidence": 0.9, "supersedes": supersedes}]})
+
+
+def test_supersede_lands_both_sides_kept(tmp_path):
+    """Mneme 雙側保留:新筆記帶 supersedes;舊筆記補 superseded_by,不刪。"""
+    e = profile_env(tmp_path)
+    stats = consolidate.run(db=e["db"], vault=e["vault"], transcript_dir=e["tdir"],
+                            now_ts=e["now"], _api=supersede_llm(e["eid"], e["old_id"]))
+    assert stats["notes_written"] == 1
+
+    entries = ltm.registry_entries(e["vault"])
+    assert len(entries) == 2                                # 兩篇都在(雙側保留)
+    new_entry = next(en for en in entries if en["id"] != e["old_id"])
+    new_note = ltm.read_note(e["vault"], new_entry["path"])
+    assert new_note["frontmatter"]["supersedes"] == e["old_id"]
+
+    old_entry = next(en for en in entries if en["id"] == e["old_id"])
+    old_note = ltm.read_note(e["vault"], old_entry["path"])
+    assert old_note["frontmatter"]["superseded_by"] == new_entry["id"]
+    assert "繁體中文" in old_note["body"]                    # 內容不動
+
+
+def test_supersede_prompt_includes_existing_profile(tmp_path):
+    """漸進揭露:蒸餾 prompt 注入既有 profile 的 INDEX 一行描述。"""
+    e = profile_env(tmp_path)
+    seen = {}
+    def spy(s, u, m, j):
+        seen["user"] = u
+        return json.dumps({"groups": []})
+    consolidate.run(db=e["db"], vault=e["vault"], transcript_dir=e["tdir"],
+                    now_ts=e["now"], _api=spy)
+    assert "既有偏好清單" in seen["user"]
+    assert e["old_id"] in seen["user"]
+
+
+@pytest.mark.parametrize("bad_target", ["20990101-nonexistent", "", "   "])
+def test_supersede_fabricated_target_rejected(tmp_path, bad_target):
+    """虛構/空 supersedes → 該組拒絕,event 留 trash。"""
+    e = profile_env(tmp_path)
+    stats = consolidate.run(db=e["db"], vault=e["vault"], transcript_dir=e["tdir"],
+                            now_ts=e["now"], _api=supersede_llm(e["eid"], bad_target))
+    assert stats["notes_written"] == 0
+    assert len(ltm.registry_entries(e["vault"])) == 1       # 只有原本那篇
+
+
+def test_supersede_already_superseded_rejected(tmp_path):
+    """已被取代的筆記不可再被指(不疊 supersede 舊鏈)。"""
+    e = profile_env(tmp_path)
+    # 先手動把 old_id 標成已 superseded
+    ltm.mark_superseded(e["vault"], e["old_id"], "20260701-some-newer")
+    stats = consolidate.run(db=e["db"], vault=e["vault"], transcript_dir=e["tdir"],
+                            now_ts=e["now"], _api=supersede_llm(e["eid"], e["old_id"]))
+    assert stats["notes_written"] == 0                       # 驗證攔截
+
+
+def test_mark_superseded_idempotent_guard(tmp_path):
+    e = profile_env(tmp_path)
+    assert ltm.mark_superseded(e["vault"], e["old_id"], "new-1")
+    assert not ltm.mark_superseded(e["vault"], e["old_id"], "new-2")  # 已標記 → False
+    note = ltm.read_note(e["vault"], f"agent/profile/{e['old_id']}.md")
+    assert note["frontmatter"]["superseded_by"] == "new-1"   # 第一次的不被覆蓋
+
+
+def test_mark_superseded_unknown_id(tmp_path):
+    vault = tmp_path / "v"
+    ltm.init_vault(vault)
+    assert not ltm.mark_superseded(vault, "20990101-ghost", "new")
+
+
+def test_u2_episodic_with_supersedes_rejected(tmp_path):
+    """audit U2:episodic 帶 supersedes 曾繞過驗證直接 mark → 現在整組拒絕。"""
+    e = profile_env(tmp_path)
+    api = lambda s, u, m, j: json.dumps({"groups": [{
+        "kind": "episodic", "title": "日誌", "topic": "T", "summary": "s",
+        "tags": ["daily-log"], "source_event_ids": [e["eid"]], "confidence": 0.9,
+        "supersedes": e["old_id"]}]})
+    stats = consolidate.run(db=e["db"], vault=e["vault"], transcript_dir=e["tdir"],
+                            now_ts=e["now"], _api=api)
+    assert stats["notes_written"] == 0                       # 整組拒絕
+    old = ltm.read_note(e["vault"], f"agent/profile/{e['old_id']}.md")
+    assert "superseded_by" not in old["frontmatter"]         # 舊筆記未被標記

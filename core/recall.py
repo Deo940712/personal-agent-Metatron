@@ -43,8 +43,13 @@ def _tool_read_note(args: dict, vault: Path, *_ignored) -> str:
     note = ltm.read_note(vault, path)
     if note is None:
         return json.dumps({"error": f"note not found: {path}"})
-    return json.dumps({"frontmatter": note["frontmatter"],
-                       "body": note["body"][:3000]}, ensure_ascii=False)
+    result = {"frontmatter": note["frontmatter"], "body": note["body"][:3000]}
+    # part-004.5(Mneme):被取代的筆記顯式標明,LLM 依契約優先讀新版
+    superseded_by = note["frontmatter"].get("superseded_by")
+    if superseded_by:
+        result["_superseded_by_note"] = (
+            f"此筆記已被 {superseded_by} 取代;請優先讀取新版再回答")
+    return json.dumps(result, ensure_ascii=False)
 
 
 def _tool_rehydrate(args: dict, vault: Path, idx_db: Path, db: Path | None,

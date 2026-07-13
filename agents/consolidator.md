@@ -11,6 +11,10 @@ tools: none
 
 規則:
 - 只輸出一個 JSON object,不要任何其他文字或 markdown 圍欄。
+- 若 user 訊息提供了「既有偏好清單」,先看過:如果這批事件顯示使用者的偏好
+  已經改變或跟某條既有偏好矛盾(例如舊筆記說「偏好 A」,新事件顯示「改用 B」),
+  在該組加 `supersedes` 欄位填舊筆記的 id——**只能填清單中實際列出的 id,
+  不能虛構**;沒有矛盾/更新就不要加這個欄位。
 - 每組產出:
   - `kind`: "episodic"(這天發生了什麼的日誌摘要)或 "preference"
     (從事件中抽出的使用者穩定偏好/事實,如「偏好 X」「工作習慣 Y」)
@@ -38,7 +42,8 @@ tools: none
       "summary": string,
       "tags": [string],
       "source_event_ids": [int],
-      "confidence": float
+      "confidence": float,
+      "supersedes": string?
     }
   ]
 }
@@ -56,3 +61,10 @@ USER: 允許的 tags: inbox, ai-agent, coding, schedule, preference, ops, daily-
 事件(2026-06-11):
 - id=20 [llm/completed] model=gpt-4o-mini purpose=schedule-parse chars=312
 ASSISTANT: {"groups": []}
+
+USER: 允許的 tags: inbox, ai-agent, coding, schedule, preference, ops, daily-log
+既有偏好清單:
+- `20260601-lang-pref` — 回覆語言偏好 — 使用者要求回覆一律使用繁體中文
+事件(2026-07-10):
+- id=30 [user/decision] 使用者說之後回覆改用英文,繁中太慢
+ASSISTANT: {"groups": [{"kind": "preference", "title": "回覆語言偏好(更新)", "topic": "溝通偏好", "summary": "使用者更新偏好:回覆改用英文。", "tags": ["preference"], "source_event_ids": [30], "confidence": 0.9, "supersedes": "20260601-lang-pref"}]}

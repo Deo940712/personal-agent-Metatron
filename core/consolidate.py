@@ -17,6 +17,7 @@ import config
 from core import health, llm, ltm, stm, subagents, vindex
 
 MAX_EVENTS_PER_GROUP = 50
+TOPIC_LINK_WINDOW_DAYS = 30    # Membox 輕量版:同 topic 跨天串連的時間窗
 
 _KIND_SUBDIR = {"episodic": "episodic", "preference": "agent/profile"}
 _KIND_REQUIRED_TAG = {"episodic": "daily-log", "preference": "preference"}
@@ -75,6 +76,11 @@ def _validate_group(group: dict, batch_ids: set[int],
     title = group.get("title")
     if not isinstance(title, str) or not title.strip():
         return "title must be a non-empty string"
+
+    # 第六條(backlog-022, Membox):topic 供跨天連結,必填
+    topic = group.get("topic")
+    if not isinstance(topic, str) or not topic.strip() or len(topic) > 30:
+        return "topic must be a non-empty string <=30 chars"
     return None
 
 
@@ -111,6 +117,7 @@ def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
             frontmatter={
                 "source": "consolidation",
                 "period": day,
+                "topic": group["topic"],
                 "source_ids": source_ids,
                 "distilled_at": datetime.fromtimestamp(stm.now()).strftime("%Y-%m-%d %H:%M"),
                 "model": config.LLM_MODEL_CHEAP,
@@ -125,9 +132,62 @@ def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
         except Exception:                        # noqa: BLE001 — 索引是衍生物,失敗不擋蒸餾
             stm.event_append(db, "consolidator", "failed",
                              f"vindex upsert failed for {note_id} (rebuild will fix)")
+        if group["kind"] == "episodic":
+            new_path = f"episodic/{note_id}.md"
+            _link_same_topic(vault, note_id, new_path, group["topic"], day, db)
         written += 1
         covered.extend(group["source_event_ids"])
     return written, covered
+
+
+def _add_related(vault: Path, path: str, related_id: str) -> bool:
+    """筆記 frontmatter 的 related list 補一筆(去重)。回傳是否真的新增。"""
+    note = ltm.read_note(vault, path)
+    if note is None:
+        return False
+    fm = note["frontmatter"]
+    related = fm.get("related", [])
+    if not isinstance(related, list):
+        related = []
+    if related_id in related:
+        return False
+    fm["related"] = related + [related_id]
+    ltm.update_note_frontmatter(vault, path, fm)
+    return True
+
+
+def _link_same_topic(vault: Path, new_id: str, new_path: str, topic: str,
+                     period: str, db: Path | None) -> int:
+    """Membox 輕量版(backlog-022):近 TOPIC_LINK_WINDOW_DAYS 天內同 topic 的
+    既有 episodic 筆記,雙向補 related 連結——不引入獨立 trace 資料結構,
+    僅靠 frontmatter 字串比對,零新模組。回傳新連結數(單向計數,雙向各補一次)。"""
+    new_date = datetime.strptime(period, "%Y-%m-%d")
+    linked = 0
+    for entry in ltm.registry_entries(vault):
+        if entry["id"] == new_id or not entry["path"].startswith("episodic/"):
+            continue
+        note = ltm.read_note(vault, entry["path"])
+        if note is None:
+            continue
+        fm = note["frontmatter"]
+        if fm.get("topic") != topic:
+            continue
+        try:
+            other_date = datetime.strptime(str(fm.get("period", "")), "%Y-%m-%d")
+        except ValueError:
+            continue
+        if abs((new_date - other_date).days) > TOPIC_LINK_WINDOW_DAYS:
+            continue
+
+        if _add_related(vault, entry["path"], new_id):     # 舊 → 新
+            linked += 1
+        _add_related(vault, new_path, entry["id"])          # 新 → 舊(雙向)
+
+    if linked:
+        stm.event_append(db, "consolidator", "state_change",
+                         f"linked {linked} same-topic notes for {new_id} (topic={topic})",
+                         target=new_id)
+    return linked
 
 
 def run(db: Path | None = None, vault: Path | None = None,

@@ -15,6 +15,9 @@ tools: none
   - `kind`: "episodic"(這天發生了什麼的日誌摘要)或 "preference"
     (從事件中抽出的使用者穩定偏好/事實,如「偏好 X」「工作習慣 Y」)
   - `title`: 短標題(≤30 字)
+  - `topic`: 這組內容的主題(≤30 字,自由文字但盡量用一致的詞彙,如
+    「架構設計」「RAG研究」「行程管理」——同主題的筆記未來會被自動串連,
+    用詞越一致連結越準)
   - `summary`: 摘要(≤500 字;episodic 要涵蓋該組所有事件的重點)
   - `tags`: 從允許清單中選(user 訊息會提供);episodic 至少含 "daily-log",
     preference 至少含 "preference"
@@ -31,6 +34,7 @@ tools: none
     {
       "kind": "episodic" | "preference",
       "title": string,
+      "topic": string,
       "summary": string,
       "tags": [string],
       "source_event_ids": [int],
@@ -46,7 +50,7 @@ USER: 允許的 tags: inbox, ai-agent, coding, schedule, preference, ops, daily-
 - id=12 [user/decision] DATA_DIR 定案放本地 OneDrive 外
 - id=13 [writer/state_change] schedule add #3 by schedule
 - id=15 [user/decision] 回覆一律用繁體中文
-ASSISTANT: {"groups": [{"kind": "episodic", "title": "架構定案與行程建立", "summary": "定案 DATA_DIR 放本地(OneDrive 外);建立行程 #3。", "tags": ["daily-log", "coding"], "source_event_ids": [12, 13], "confidence": 0.9}, {"kind": "preference", "title": "回覆語言偏好", "summary": "使用者要求回覆一律使用繁體中文。", "tags": ["preference"], "source_event_ids": [15], "confidence": 0.95}]}
+ASSISTANT: {"groups": [{"kind": "episodic", "title": "架構定案與行程建立", "topic": "架構設計", "summary": "定案 DATA_DIR 放本地(OneDrive 外);建立行程 #3。", "tags": ["daily-log", "coding"], "source_event_ids": [12, 13], "confidence": 0.9}, {"kind": "preference", "title": "回覆語言偏好", "topic": "溝通偏好", "summary": "使用者要求回覆一律使用繁體中文。", "tags": ["preference"], "source_event_ids": [15], "confidence": 0.95}]}
 
 USER: 允許的 tags: inbox, ai-agent, coding, schedule, preference, ops, daily-log
 事件(2026-06-11):

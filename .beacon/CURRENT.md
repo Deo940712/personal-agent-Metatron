@@ -1,21 +1,43 @@
 ﻿# CURRENT
 
-Status: planning-only
+Part: part-004.5
+Slice: slice-001
+Status: active
+Design authority: `.beacon/parts/part-004.5/DESIGN.md`
+TODO source: `.beacon/parts/part-004.5/TODO.md#part-0045-slice-001-主題連續性蒸餾membox`
 
-part-004 完成並歸檔（.beacon/done/part-004/，Phase 4 gate mock 端到端通過）。
-完整知識鏈就位：threads-sync → runner → inbox → curator（去重/評分/入庫）
-→ INDEX/vindex → recall（帶引用問答，引用驗證程式面保障）。
+## Goal
 
-## 待使用者動作（累積四批真 QA）
+蒸餾契約加 topic 欄位；consolidate 收尾自動連結近 30 天同主題筆記（Membox 輕量版）。
 
-1. `MY_AGENT_LLM_API_KEY`（+ 選配 BASE_URL）→ 真 LLM/embedding QA
-2. Discord token + user id → 真 Discord QA
-3. threads-sync Playwright session（原機器 cookies）→ 真同步 QA
+## Allowed Scope
 
-## 下一步選項（PART 完成 = 自然暫停點）
+- [ ] `agents/consolidator.md`：輸出 schema 加 `topic`（必填,<=30字）+ few-shot
+- [ ] `core/consolidate.py`：`_validate_group` 第六條（topic）；寫筆記後掃近 30
+      天同 topic episodic 筆記，雙向補 related
+- [ ] pytest：topic 驗證 boundary；連結產生；無同主題時不連結；30 天窗口邊界
 
-- **part-004.5 記憶強化**：Membox 主題 trace / Mneme supersede / RRF（真資料前的最後強化）
-- **part-006 slice-1 stdio MCP**：遠端開發迴圈（dev_status/directive 佇列）——可插隊
-- part-003.5 唯讀儀表板 / part-005 coding_tracker
+## Forbidden Scope
 
-在 DESIGN 建立並 promote SLICE 前，無可執行 SLICE。
+- supersede（slice-002）；RRF（slice-003）
+
+## Files-scope
+
+agents/consolidator.md, core/consolidate.py, tests/test_consolidate.py
+
+## Expected Output
+
+兩天各蒸餾出同主題筆記 → 自動產生雙向 related 連結。
+
+## Verification Plan
+
+- Unit: `python -m pytest tests/test_consolidate.py -q`
+- Regression: `python -m pytest tests/ -q`（254 不壞）
+
+## Current Blockers
+
+None
+
+## Recovery Incident
+
+None

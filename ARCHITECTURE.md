@@ -1,4 +1,4 @@
-# MY AGENT — 個人行程 + 知識庫助理 架構文件
+﻿# MY AGENT — 個人行程 + 知識庫助理 架構文件
 
 > 狀態:設計定案,實作依 `.beacon/` 推進。前身參考:[threads-sync](https://github.com/Deo940712/threads-sync)
 > (Capture → State → Transform → Output 管線、config.py 集中路徑、SQLite 去重、每步 idempotent)。
@@ -41,7 +41,7 @@ flowchart TD
     end
 
     subgraph STORAGE["儲存層"]
-        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>六張表")]
+        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>八張表")]
         DB2[("DB2 Obsidian vault<br/>Markdown 知識介面<br/>semantic/ + episodic/ + agent/")]
         COLD[("冷儲存 transcript<br/>append-only JSONL + .idx<br/>永不刪")]
         VEC[("向量索引<br/>衍生物,可重建")]
@@ -88,14 +88,15 @@ flowchart TD
 - **單層**:子 agent 不再生子 agent
 - **寫入鐵律**:子 agent 只提案,writer.py 驗證後落地
 
-| 子 Agent | 職責 | 輸入 | 輸出契約 |
-|---|---|---|---|
-| schedule | 行程/待辦/提醒 CRUD | 指令 + DB1 現況 | 變更提案 |
-| curator | 貼文評分、分類、去重、入 vault、建連結 | inbox 筆記路徑批次 | 每篇:score + tags + 摘要 + evidence(提案) |
-| **librarian** | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延/INDEX 漂移/stale 維護(§4.3) | 維護掃描器的確定性報告 | 維護提案批次(dry-run 報告先行) |
-| coding_tracker | 掃 git log 更新專案 phase/blockers | 專案路徑清單 | 每專案:phase, blockers, next(提案) |
-| sync-{threads,x,fb} | 平台抓取管線(非 LLM,純 CLI) | cursor | new_count, status |
-| recall | index-first → 向量 fallback → rehydrate 三段檢索答問 | 查詢字串 | 引用來源的答案(≤500 字) |
+| 子 Agent | 職責 | 輸入 | 輸出契約 | 狀態 |
+|---|---|---|---|---|
+| schedule | 行程/待辦/提醒解析(rrule 重複、remind 預設 30 分) | 使用者原句 + 現有項目 | `schedule_change`/`task_change` 提案 | ✅ |
+| consolidator | 夜間蒸餾:到期 events → episodic 日誌 / preference 偏好;五條欄位級驗證 | 到期 events 批次(按天分組) | 蒸餾組(kind/title/summary/tags/source_ids/confidence) | ✅ |
+| curator | 貼文評分(0-10 閘門)、分類、去重、入 vault、建連結 | inbox 筆記路徑批次 | `classify_note` 提案 | 📋 part-004 |
+| librarian | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延/INDEX 漂移/stale 維護(§4.3) | 維護掃描器的確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 part-004+ |
+| coding_tracker | 三源進度綜合(git + beacon + opencode) | 專案路徑清單 | `project_update` 提案 | 📋 part-005 |
+| sync-{threads,x,fb} | 平台抓取管線(非 LLM,純 CLI;threads 經 skills/runner) | cursor | new_count, status | threads ✅ / x,fb 📋 |
+| recall | 四段級聯檢索答問(index→FTS→向量→rehydrate) | 查詢字串 | 引用來源的答案(≤500 字) | 📋 part-004 |
 
 ### 3.1 提案(Proposal)格式
 
@@ -341,7 +342,7 @@ flowchart LR
 
 ## 5. 資料模型
 
-### 5.1 DB1 `state.db` 完整 DDL(六張表)
+### 5.1 DB1 `state.db` 完整 DDL(八張表)
 
 ```sql
 -- 行程 (免疫衰減)
@@ -427,6 +428,30 @@ CREATE TABLE events (
 );
 CREATE INDEX idx_events_ts ON events(ts);
 CREATE INDEX idx_events_state_health ON events(state, health);
+
+-- 待確認提案 (part-002.5:非同步兩階段確認;bot/MCP 重啟不丟)
+CREATE TABLE pending_proposals (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  proposal     TEXT    NOT NULL,          -- JSON 序列化的提案信封
+  preview      TEXT    NOT NULL,          -- 已算好的預覽文
+  status       TEXT    NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending','done','cancelled','expired')),
+  channel_ref  TEXT,                      -- 回覆定址 (Discord user id / MCP client)
+  created_at   INTEGER NOT NULL
+);
+CREATE INDEX idx_pending_status ON pending_proposals(status);
+
+-- 遠端指令佇列 (part-006 slice-1 實作;目前 stm 為七表,此表隨 part-006 加入)
+CREATE TABLE directives (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  project      TEXT    NOT NULL,          -- 目標專案 (對應 projects.name 或路徑)
+  text         TEXT    NOT NULL,          -- 指令內容
+  status       TEXT    NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending','consumed','cancelled')),
+  created_at   INTEGER NOT NULL,
+  consumed_at  INTEGER                    -- 被 session 讀取執行的時間
+);
+CREATE INDEX idx_directives_status ON directives(status, project);
 ```
 
 **記錄原則**(events 只記,防止變成另一種肥大 session):
@@ -690,51 +715,75 @@ sequenceDiagram
 
 ## 9. 目錄結構
 
+狀態標記:✅ 已實作|📋 規劃中
+
 ```
 my-agent/
-├── core/                  # Orchestrator (無狀態)
-│   ├── agent.py           # 入口:一次呼叫 = 讀 STM → 派工 → 綜合 → 寫回;--job remind/consolidate
-│   ├── stm.py             # DB1 存取層 (六張表,§5.1)
-│   ├── ltm.py             # DB2 存取層 (vault 寫入 + index-first 檢索 + 向量 fallback)
-│   ├── writer.py          # 單一 writer:驗證提案後落地 (唯一寫入口,§3.1)
-│   ├── consolidate.py     # 夜間蒸餾 job (§6.3)
-│   └── tools/             # 工具層 (§3.2):index/note/vector/transcript/git/beacon/opencode/vault 掃描器
-├── agents/                # 子 agent 定義:prompt + 輸出契約 + 工具白名單
-│   ├── schedule.md        # 純函數型,無工具
-│   ├── curator.md         # 純函數型,無工具
-│   ├── librarian.md       # 純函數型;輸入由 vault.scan 確定性收集 (§4.3)
-│   ├── coding_tracker.md  # 純函數型;輸入由 git/beacon/opencode 掃描器確定性收集
-│   └── recall.md          # 代理型;唯讀工具白名單 (index/note/vector/transcript)
-├── channels/              # 介面層 (INTERFACES.md):薄 adapter,零業務邏輯
-│   ├── discord_bot.py     # Phase 2.5:出門排事情 + 提醒 DM
-│   ├── dashboard.py       # Phase 3.5:唯讀儀表板 (FastAPI, 127.0.0.1)
-│   └── mcp_server.py      # Phase 6
-├── skills/                # 非 LLM 抓取管線 (threads-sync 模式,純 CLI)
-│   ├── threads_sync/      # 既有專案遷入或 submodule
-│   ├── x_sync/            # 起步:xarchive JSON 轉換器
-│   └── fb_sync/           # 最後做,先 probe
-├── config.py              # 所有路徑與參數;API key 走 api_key_env 引用環境變數
-├── tests/
-└── data/                  # (在 DATA_DIR,不 commit) state.db / index.db / transcript/ / raw/ / playwright/
+├── core/                    # 無狀態核心
+│   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate(未來 +curate)
+│   ├── stm.py            ✅ # DB1 存取層(八張表,§5.1)+ CLI
+│   ├── llm.py            ✅ # OpenAI 相容薄層(重試/JSON 模式/降級/events 記錄)
+│   ├── subagents.py      ✅ # 子 agent 執行器(讀契約→組 prompt→單次呼叫→解析)
+│   ├── proposals.py      ✅ # 提案信封 + payload 驗證(§3.1)
+│   ├── writer.py         ✅ # 唯一寫入口:precheck / apply / confirm_and_apply(二階段重驗)
+│   ├── chat.py           ✅ # 平台無關兩階段確認邏輯(Discord/MCP 共用)
+│   ├── transcript.py     ✅ # 冷儲存:JSONL+.idx、三模式讀取、rebuild_idx 自癒
+│   ├── health.py         ✅ # 代謝:decay/to_trash(原文落地)/on_hit/due_for_distill
+│   ├── ltm.py            ✅ # DB2 vault:init/write_note(ID 防撞)/INDEX registry/read
+│   ├── consolidate.py    ✅ # 夜間蒸餾:分組→LLM→五條驗證→筆記→archived→vindex
+│   ├── vindex.py         ✅ # 檢索索引:FTS5 trigram + vec0 + note_map;rebuild
+│   ├── retrieve.py       ✅ # 四段級聯 + 回血閉環 + rehydrate
+│   ├── curator_pre.py    📋 # part-004:inbox 前處理(hash/去重/欄位補齊)
+│   ├── curate.py         📋 # part-004:curator 管線(評分閘門/配額)
+│   ├── recall.py         📋 # part-004:代理型問答(工具迴圈+引用)
+│   ├── octools.py        📋 # part-006:opencode.db 唯讀讀取器(=part-005 掃描器)
+│   └── mcp/tools.py      📋 # part-006:MCP 工具定義(與傳輸無關)
+├── agents/                  # 子 agent 契約:prompt + 輸出 schema + few-shot
+│   ├── schedule.md       ✅ # 行程解析(rrule/remind 預設/evidence=原句)
+│   ├── consolidator.md   ✅ # 蒸餾(episodic/preference;不得虛構 source)
+│   ├── curator.md        📋 # part-004:評分+分類(閾值/配額)
+│   ├── recall.md         📋 # part-004:代理型(唯讀工具白名單/引用硬規則)
+│   ├── librarian.md      📋 # part-004+:vault 維護(§4.3)
+│   └── coding_tracker.md 📋 # part-005:三源綜合
+├── channels/                # 介面層(INTERFACES.md):薄 adapter 零業務邏輯
+│   ├── discord_bot.py    ✅ # 白名單 fail-closed/按鈕/DM/延遲 import
+│   ├── mcp_stdio.py      📋 # part-006:本機 stdio MCP
+│   ├── mcp_http.py       📋 # part-006:遠程 HTTP/SSE(Tailscale IP,綁公網拒絕)
+│   └── dashboard.py      📋 # part-003.5:唯讀儀表板(FastAPI 127.0.0.1)
+├── skills/                  # 非 LLM 抓取管線(純 CLI)
+│   ├── runner.py         ✅ # skill 執行器(五步驟/login_expired 判定/DB1 記錄)
+│   ├── threads_sync_vendor/ ✅ # vendored clone(pin commit;VENDORED.md;零修改黑箱)
+│   ├── x_sync/           📋 # xarchive JSON 轉換器起步
+│   └── fb_sync/          📋 # 最後做,先 probe
+├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
+├── docs/MEMORY-{zh,en}.md ✅ # 記憶系統實作規格(雙語)
+├── tests/                ✅ # 223+ tests(15 檔)
+└── data/                    # (在 DATA_DIR=C:\Users\tcart\my-agent-data,不 commit)
+    ├── state.db             # DB1
+    ├── index.db             # 向量索引(衍生物)
+    ├── transcript/          # 冷儲存 JSONL+.idx
+    └── vault/               # DB2(Obsidian 開這裡)
 ```
 
 ## 10. 建置順序(phased,每 phase 有 gate)
 
 ```mermaid
 flowchart LR
-    P1["Phase 1<br/>config + DB1 schema<br/>+ stm.py CRUD CLI"] --> P2["Phase 2<br/>Orchestrator + 子agent契約<br/>+ writer.py"] --> P25["Phase 2.5<br/>Discord bot<br/>(INTERFACES §4)"] --> P3["Phase 3<br/>consolidate 蒸餾 + 冷儲存<br/>+ index-first / 向量檢索"] --> P35["Phase 3.5<br/>唯讀儀表板<br/>(INTERFACES §5)"] --> P4["Phase 4<br/>threads-sync 接入<br/>→ x_sync → fb_sync"] --> P5["Phase 5<br/>coding_tracker<br/>git+beacon+opencode 三源"] -.-> P6["Phase 6 (backlog)<br/>MCP server<br/>唯讀查詢暴露"]
+    P1["✅ Phase 1<br/>schema + CRUD CLI"] --> P2["✅ Phase 2<br/>Orchestrator + writer<br/>+ schedule + remind"] --> P25["✅ Phase 2.5<br/>Discord bot<br/>兩階段確認"] --> P3["✅ Phase 3<br/>記憶核心:冷儲存/代謝<br/>/蒸餾/四段檢索"] --> P4["Phase 4<br/>threads-sync runner ✅<br/>→ curator → recall"] --> P45["Phase 4.5<br/>記憶強化:主題trace<br/>/supersede/RRF"] --> P5["Phase 5<br/>coding_tracker<br/>三源"] --> P6["Phase 6<br/>MCP:遠端開發迴圈<br/>stdio → Tailscale HTTP"]
+    P3 -.-> P35["Phase 3.5<br/>唯讀儀表板<br/>(可插隊)"]
 ```
 
-| Phase | Gate(驗收條件) |
-|---|---|
-| 1 | CLI 可增查改行程/待辦/專案;`init` idempotent;跨行程測試證明狀態僅經 DB1 |
-| 2 | 兩次獨立呼叫之間狀態完全靠 DB1 接續;子 agent 提案被 writer 驗證攔截測試通過 |
-| 2.5 | 手機 Discord 發「明天開會」→ 預覽 → ✅ → DB1 有列;提醒 DM 收得到 |
-| 3 | 低健康 events 蒸餾後出現在 vault 且可檢索;rehydrate 能沿 source_ids 讀回原文 |
-| 3.5 | localhost:7777 五版塊有真資料;儀表板為物理唯讀(`mode=ro`) |
-| 4 | threads-sync 例行同步跑通;x_sync 轉換器把 xarchive JSON 入庫;跨源去重生效 |
-| 5 | coding_tracker 三源掃描(git + .beacon + OpenCode sessions)自動更新 projects 表 |
-| 6(backlog) | MCP server 暴露唯讀查詢;在 OpenCode 內能問「今天行程 / 我存過什麼」 |
+| Phase | Gate(驗收條件) | 狀態 |
+|---|---|---|
+| 1 | CLI 可增查改行程/待辦/專案;`init` idempotent;跨行程測試證明狀態僅經 DB1 | ✅ 2026-07-13 |
+| 2 | 兩次獨立呼叫之間狀態完全靠 DB1 接續;子 agent 提案被 writer 驗證攔截測試通過 | ✅ 程式面(真 LLM QA 待 key) |
+| 2.5 | 手機 Discord 發「明天開會」→ 預覽 → ✅ → DB1 有列;提醒 DM 收得到 | ✅ 程式面(真連線 QA 待 token) |
+| 3 | 低健康 events 蒸餾後出現在 vault 且可檢索;rehydrate 能沿 source_ids 讀回原文 | ✅ 端到端實跑 |
+| 4 | threads-sync 例行同步跑通(runner ✅);curator 評分閘門+去重;recall 帶引用答對 | 🔨 slice-001 done |
+| 4.5 | 主題 trace 連結生效;supersede 落地(舊筆記標記);RRF 檢索過 golden queries | 📋 |
+| 5 | coding_tracker 三源掃描自動更新 projects 表 | 📋(octools 隨 part-006 提前) |
+| 3.5 | localhost:7777 五版塊有真資料;儀表板物理唯讀(`mode=ro`) | 📋 可插隊 |
+| 6 | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到;排行程跨介面確認 | 📋 stdio 先行 |
 
 ## 11. 開放決策(實作前定案)
 

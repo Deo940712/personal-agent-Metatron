@@ -149,11 +149,37 @@ sequenceDiagram
 └─────────────────────────────────────────────┘
 ```
 
-## 6. MCP server(Phase 6,見 ARCHITECTURE §3.4)
+## 6. MCP server(Phase 6;設計權威 `.beacon/parts/part-006/DESIGN.md`)
 
-- 工具:`recall_query` / `schedule_list` / `task_list` / `project_status` / `memory_rehydrate`(全唯讀)
-- 寫入類(`schedule_add`)後期評估;即使加,也必走 writer.apply + 確認,不因 MCP 繞過
-- stdio 起步(本機 OpenCode 用),不用 HTTP
+**核心用例:遠端接管開發迴圈**——人不在電腦前,讀「OpenCode 做到哪」+ 下
+「下一步指令」。一套工具、兩種傳輸(薄 adapter 哲學)。
+
+### 6.1 開發迴圈工具
+
+| 工具 | 讀/寫 | 說明 |
+|---|---|---|
+| `dev_status([project])` | 讀 | 三源綜合:opencode.db(最近 session/todo)+ beacon.scan(CURRENT)+ git.scan |
+| `session_tail(session_id?, n)` | 讀 | AI 剛做了什麼(最後 n 則對話摘要;opencode.db `mode=ro`) |
+| `directive_push(project, text)` | 寫 | 下一步指令 → DB1 directives 佇列 |
+| `directive_list([status])` | 讀 | 佇列現況 |
+
+**指令閉環**:遠端 push → DB1 → 下次 OpenCode session 開場讀取(AGENTS.md 規則:
+先跑 `python -m core.stm directives pending`)→ 標 consumed。不注入運行中 session
+(脆弱);headless `opencode run` 遠端啟動為 VPS 後 backlog。
+
+### 6.2 助理工具
+
+`recall_query` / `schedule_list` / `task_list` / `project_status` /
+`memory_rehydrate`(唯讀)+ `schedule_add` / `task_add`(寫 → pending + 預覽)
++ `confirm(pending_id, approve)`。**寫入必走 writer + 確認,不因 MCP 繞過**;
+pending 在 DB1 共用 → MCP 發起、Discord 確認,跨介面一致。
+
+### 6.3 兩種傳輸
+
+- **slice-1 stdio**(本機,現可做):OpenCode 直接 spawn,零網路零認證
+- **slice-2 HTTP/SSE**(VPS 後):綁 **Tailscale IP**(WireGuard 私有網路,
+  不上公網);綁公網 IP → 啟動即拒絕(fail-closed)。Tailscale 下 recall 全文
+  的內容分級(§4.1)解除
 
 ## 7. 介面層鐵律(全 channel 適用)
 
@@ -166,8 +192,9 @@ sequenceDiagram
 
 ## 8. 建置時程(嵌入主 phase 計畫)
 
-| 介面 phase | 依賴 | Gate |
-|---|---|---|
-| 2.5 Discord bot | Phase 2(orchestrator + writer 可用) | 手機發「明天開會」→ 預覽 → ✅ → DB1 有列;提醒 DM 收得到 |
-| 3.5 儀表板 | Phase 3(events/健康值有資料可看) | 開 localhost:7777 五版塊有真資料;寫入嘗試被 405 拒 |
-| 6 MCP | Phase 5 後 | OpenCode 內問「今天行程」得到答案 |
+| 介面 phase | 依賴 | Gate | 狀態 |
+|---|---|---|---|
+| 2.5 Discord bot | Phase 2(orchestrator + writer 可用) | 手機發「明天開會」→ 預覽 → ✅ → DB1 有列;提醒 DM 收得到 | ✅ 程式面(真連線 QA 待 token) |
+| 3.5 儀表板 | Phase 3(events/健康值有資料可看) | 開 localhost:7777 五版塊有真資料;寫入嘗試被 405 拒 | 📋 可插隊 |
+| 6 MCP slice-1(stdio) | 無硬依賴(directives/octools 自帶) | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到 | 📋 可插隊 |
+| 6 MCP slice-2(HTTP) | VPS + Tailscale | 遠端 OpenCode 全工具通;綁公網拒絕測試綠 | 📋 gate: VPS |

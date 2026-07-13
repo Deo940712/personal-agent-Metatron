@@ -1,9 +1,9 @@
-# AGENTS.md
+﻿# AGENTS.md
 
 ## What this repo is
 
-A personal schedule + knowledge-base assistant agent (parts 001-002 implemented,
-93 tests green). The full architecture decision record is in
+A personal schedule + knowledge-base assistant agent (parts 001-003 + 002.5 done,
+part-004 in progress; 223 tests green). The full architecture decision record is in
 [ARCHITECTURE.md](ARCHITECTURE.md) — read it before implementing anything.
 Interface layer design authority: [INTERFACES.md](INTERFACES.md).
 Memory system implementation spec (probe-verified platform behavior — READ before
@@ -94,17 +94,22 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
 - `data/` (state.db, playwright session, cookies) is secret-bearing — never commit.
 - Low frequency, jittered delays; no anti-detection evasion.
 
-## Build order (respect the phase gates in ARCHITECTURE.md)
+## Build order (respect the phase gates in ARCHITECTURE.md §10)
 
-1. `config.py` + DB1 schema + `stm.py` (CRUD works via CLI)
-2. Stateless core loop `agent.py` (state survives across separate invocations via DB1 only)
-2.5. Discord bot channel (INTERFACES.md §4) — reminders via DM, mobile scheduling
-3. `consolidate.py` nightly archival + DB2 vector index
-3.5. Read-only web dashboard (INTERFACES.md §5) — FastAPI, 127.0.0.1, `mode=ro`
-4. Integrate threads-sync as first skill; clone pattern for x-sync / fb-sync
-5. `coding_tracker` — three read-only progress signals per project: git log +
-   `.beacon/CURRENT.md` parsing + OpenCode session store (`~/.local/share/opencode`)
-6. (backlog) MCP server exposing read-only queries; writes still go through writer.apply
+DONE: 1 (schema+CRUD), 2 (orchestrator+writer+schedule+remind), 2.5 (Discord bot,
+live QA pending token), 3 (memory core: transcript/health/consolidate/vindex/
+retrieve), 4-slice-001 (threads-sync vendored + runner).
+IN PROGRESS: 4 (curator → recall).
+NEXT: 4.5 memory upgrades (Membox topic traces / Mneme supersede / RRF) → 5
+coding_tracker → 6 MCP dev-loop control (stdio first, then Tailscale HTTP).
+3.5 dashboard and 6-slice-1 (stdio MCP + directives queue) may jump the queue.
+Key facts for future sessions:
+- OpenCode session store confirmed readable: `~/.local/share/opencode/opencode.db`
+  (SQLite, WAL; tables session/message/part/todo) — open `mode=ro` only.
+- threads-sync is VENDORED (skills/threads_sync_vendor, pinned commit, zero-edit
+  black box); integration is env vars THREADS_SYNC_VAULT/DATA only.
+- `directives` table (8th, part-006) = remote command queue; session-start rule
+  will be: run `python -m core.stm directives pending` and obey before other work.
 
 ## Open decisions — ask the user before committing to one
 

@@ -2,9 +2,13 @@
 
 Status: planning-only
 
-part-005 完成並歸檔(.beacon/done/part-005/,Phase 5 gate 真三源端到端通過)。
-coding_tracker 就位:git + beacon + opencode 三源唯讀掃描 → LLM 綜合 →
-projects 表自動更新。314 tests。
+part-005 完成(Phase 5 gate 真三源通過)。part-003.5 已設計(DESIGN + TODO 就位)。
+
+## 已定執行順序(2026-07-13 使用者定案:兩個都做)
+
+1. **part-006 slice-1**(先):stdio MCP + directives 第八表——它改共用檔 stm.py,
+   先動 schema
+2. **part-003.5**(後):唯讀儀表板——純新檔零重疊,且可順帶顯示 directives 版塊
 
 ## 待使用者動作(累積四批真 QA,不 block)
 
@@ -12,10 +16,6 @@ projects 表自動更新。314 tests。
 2. Discord token + user id → 真 Discord QA
 3. threads-sync Playwright session → 真同步 QA
 
-## 下一步選項(PART 完成 = 自然暫停點)
+## 下一步
 
-- **part-006 slice-1 stdio MCP**:遠端開發迴圈(dev_status/directive 佇列)
-  ——octools 資料層已就位,只差 directives 表 + MCP 工具 + stdio adapter
-- part-003.5 唯讀儀表板
-
-在 DESIGN 建立並 promote SLICE 前,無可執行 SLICE。
+promote part-006-slice-001 到本檔即開工。

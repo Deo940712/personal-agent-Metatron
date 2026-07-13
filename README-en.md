@@ -1,4 +1,4 @@
-# MY AGENT — Personal Schedule + Knowledge-Base Assistant
+﻿# MY AGENT — Personal Schedule + Knowledge-Base Assistant
 
 > [繁體中文](README.md) | English
 
@@ -181,7 +181,7 @@ VPS means editing one file.
 ## Development
 
 ```bash
-python -m pytest tests/ -q     # 210 tests
+python -m pytest tests/ -q     # 314 tests
 ```
 
 Workflow: [Beacon](.beacon/PLAN.md) (plan → design → slice → execute → verify →
@@ -203,10 +203,12 @@ into a regression test.
 - ✅ part-002 Orchestrator + writer + schedule agent + remind
 - ✅ part-002.5 Discord bot (two-stage confirmation + DM push)
 - ✅ part-003 Memory core (cold storage / metabolism / distillation / cascade retrieval)
-- 📋 part-004 Sync skills (threads/x/fb → vault) + curator + recall
-- 📋 part-004.5 Memory upgrades (topic traces / supersede / RRF)
-- 📋 part-005 coding_tracker (git + beacon + opencode signals)
-- 📋 part-003.5 dashboard / part-006 MCP server
+- ✅ part-004 Sync skills (threads runner + curator + recall)
+- ✅ part-004.5 Memory upgrades (topic traces / supersede / RRF fusion)
+- ✅ part-005 coding_tracker (git + beacon + opencode signals, live gate passed)
+- 📋 part-006 stdio MCP (remote dev-loop: dev_status/directives queue) — designed
+- 📋 part-003.5 read-only dashboard — designed (after part-006 slice-1)
+- 📋 Pending user env: four real-QA batches (LLM key / Discord token / threads session)
 
 Predecessor project: [threads-sync](https://github.com/Deo940712/threads-sync)
 (saved Threads posts → Obsidian; this project reuses its pipeline patterns and will

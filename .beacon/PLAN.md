@@ -25,10 +25,10 @@
 | part-002 | **done** (2026-07-13) | Orchestrator + writer + LLM 薄層 + schedule 子 agent + remind job；93 tests 綠、Phase 2 gate 程式面通過（真 LLM QA 待 key） | `.beacon/parts/part-002/DESIGN.md` | `.beacon/done/part-002/` |
 | part-002.5 | **done** (2026-07-13) | Discord bot：兩階段確認 + 提醒 DM + 白名單；210 tests 綠，真連線 QA blocked（等使用者環境） | `.beacon/parts/part-002.5/DESIGN.md` | `.beacon/done/part-002.5/` |
 | part-003 | **done** (2026-07-13) | 記憶核心完成：transcript+health+consolidate+vindex+retrieve；162 tests 綠、Phase 3 gate 通過（端到端實跑） | `.beacon/parts/part-003/DESIGN.md` | `.beacon/parts/part-003/TODO.md` |
-| part-003.5 | planned | 唯讀網頁儀表板（INTERFACES.md §5）：FastAPI+htmx、127.0.0.1、`mode=ro`、五版塊 | TBD | TBD |
+| part-003.5 | designed | 唯讀儀表板：FastAPI+htmx 單頁、127.0.0.1:7777、三層唯讀保證（GET-only/mode=ro/測試斷言）、六版塊含 directives；排 part-006 slice-1 之後 | `.beacon/parts/part-003.5/DESIGN.md` | `.beacon/parts/part-003.5/TODO.md` |
 | part-004 | **done** (2026-07-13) | sync skills + curator + recall；254 tests、Phase 4 gate（mock 端到端）通過；真同步/LLM QA blocked | `.beacon/parts/part-004/DESIGN.md` | `.beacon/done/part-004/` |
 | part-004.5 | **done** (2026-07-13) | 記憶強化：Membox 主題trace + Mneme supersede + Cognis RRF；280 tests、Phase 4.5 gate 通過 | `.beacon/parts/part-004.5/DESIGN.md` | `.beacon/done/part-004.5/` |
-| part-005 | planned | coding_tracker：三源進度掃描（git log + .beacon/CURRENT 解析 + OpenCode sessions）→ project_update 提案 | TBD | TBD |
+| part-005 | **done** (2026-07-13) | coding_tracker 三源掃描；314 tests、Phase 5 gate（真三源端到端）通過 | `.beacon/parts/part-005/DESIGN.md` | `.beacon/done/part-005/` |
 | part-006 | designed | MCP server：一套工具兩傳輸——slice-1 本機 stdio（OpenCode 直問，現可做）+ slice-2 遠程 HTTP/SSE over Tailscale（VPS 後）；讀寫皆可，寫走 writer+確認 | `.beacon/parts/part-006/DESIGN.md` | `.beacon/parts/part-006/TODO.md` |
 
 ## Success Criteria

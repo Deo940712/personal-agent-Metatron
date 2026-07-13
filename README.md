@@ -1,4 +1,4 @@
-# MY AGENT — 個人行程 + 知識庫助理
+﻿# MY AGENT — 個人行程 + 知識庫助理
 
 > 繁體中文 | [English](README-en.md)
 
@@ -72,11 +72,11 @@ Mem0 / Hermes 等,設計依據見 [ARCHITECTURE.md](ARCHITECTURE.md) §12):
 
 技術細節(完整 API、不變量、故障恢復):[docs/MEMORY-zh.md](docs/MEMORY-zh.md)
 
-**已規劃的記憶強化(part-004.5,依 2026 論文實證)**:主題連續性蒸餾(Membox:
-同主題跨天串成事件 trace,不再按天碎片化)、矛盾偵測 + supersede 執行(Mneme:
-新舊偏好雙側保留、檢索並列、引用前查 superseded_by)、RRF 跨段融合檢索(Cognis)。
-待訂(觸發條件制):cross-encoder rerank(golden queries 出排名問題時)、
-per-category 衰減速率(真實使用 1-2 月有數據時)。
+**記憶強化(part-004.5,已完成,依 2026 論文實證)**:主題連續性蒸餾(Membox:
+同主題跨天雙向 related 串連)、矛盾偵測 + supersede 執行(Mneme:新舊偏好雙側
+保留、recall 讀到被取代筆記會提示新版)、RRF 跨段融合檢索(Cognis:k=60,
+強命中保留零成本短路)。待訂(觸發條件制):cross-encoder rerank(golden
+queries 出排名問題時)、per-category 衰減速率(真實使用 1-2 月有數據時)。
 
 ## 所有 Agent 的職能
 
@@ -95,11 +95,11 @@ tags 在受控詞彙表、evidence 屬實、enum 合法…)+ 三層危險閘門(
 |---|---|---|---|---|
 | **schedule** | 自然語言 → 行程/待辦提案(「明天下午兩點開會提前30分提醒」);rrule 重複行程 | 使用者原句 + 現有行程 | `schedule_change` / `task_change` 提案 | ✅ |
 | **consolidator** | 夜間蒸餾:到期事件 → 日誌摘要(episodic)/ 使用者偏好(agent/profile);每個決策過欄位級驗證,不得虛構來源 | 到期 events 批次 | 蒸餾組(kind/title/summary/tags/source_ids/confidence) | ✅ |
-| **curator** | 貼文評分(0-10 閘門)、分類、跨源去重、入 vault、建連結;中文 FIRE 拆卡 | inbox 筆記批次 | `classify_note` 提案 | 📋 part-004 |
-| **librarian** | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延/INDEX 漂移維護;兩階段(確定性掃描 + opt-in LLM 整理)、快照可回滾、永不刪除 | vault.scan 確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 part-004+ |
-| **coding_tracker** | vibe coding 進度:三個唯讀訊號源(git log + `.beacon/CURRENT.md` 解析 + OpenCode sessions)→ 綜合每專案 phase/blockers/next | 專案路徑清單 | `project_update` 提案 | 📋 part-005 |
-| **recall** | 知識庫問答:四段級聯檢索,回答必附引用,無來源不得斷言 | 查詢字串 | 帶引用的答案 | 📋 part-004 |
-| sync-{threads,x,fb} | 平台抓取管線(**非 LLM**,純 CLI:Capture→State→Transform→Output,idempotent 可續傳) | cursor | new_count, status | 📋 part-004 |
+| **curator** | 貼文評分(0-10 閘門 4.0)、分類、依日期去重、入 vault;manual_tags 永不覆蓋 | inbox 筆記批次 | `classify_note` 提案 | ✅ |
+| **recall** | 知識庫問答:index→FTS→向量 RRF 融合 + rehydrate;引用程式面驗證(假引用整答丟棄);superseded_by 提示 | 查詢字串 | 帶引用的答案 | ✅ |
+| **coding_tracker** | vibe coding 進度:三源唯讀掃描(git + `.beacon/CURRENT` + OpenCode sessions,beacon 最高權威)→ 每專案 phase/blockers/next | 已註冊專案 | `project_update` 提案 | ✅ |
+| **librarian** | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延維護;兩階段、快照可回滾、永不刪除 | vault.scan 確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 backlog-017 |
+| sync-{threads,x,fb} | 平台抓取管線(**非 LLM**,純 CLI,idempotent 可續傳) | cursor | new_count, status | threads ✅ / x,fb 📋 |
 
 子 agent 分兩型:**純函數型**(單次 LLM 呼叫、無工具、可重放測試——schedule/
 consolidator/curator/librarian/coding_tracker)與**代理型**(唯讀工具白名單、
@@ -166,7 +166,7 @@ python -m channels.discord_bot
 ## 開發
 
 ```bash
-python -m pytest tests/ -q     # 210 tests
+python -m pytest tests/ -q     # 314 tests
 ```
 
 工作流:[Beacon](.beacon/PLAN.md)(plan → design → slice → execute → verify →
@@ -185,11 +185,13 @@ python -m pytest tests/ -q     # 210 tests
 - ✅ part-001 基礎層(schema + CRUD CLI)
 - ✅ part-002 Orchestrator + writer + schedule agent + remind
 - ✅ part-002.5 Discord bot(兩階段確認 + DM 推播)
-- ✅ part-003 記憶核心(冷儲存/代謝/蒸餾/四段檢索)
-- 📋 part-004 sync skills(threads/x/fb → vault)+ curator + recall
-- 📋 part-004.5 記憶強化(主題 trace / supersede / RRF)
-- 📋 part-005 coding_tracker(git + beacon + opencode 三源)
-- 📋 part-003.5 儀表板 / part-006 MCP server
+- ✅ part-003 記憶核心(冷儲存/代謝/蒸餾/檢索)
+- ✅ part-004 sync skills(threads runner + curator + recall)
+- ✅ part-004.5 記憶強化(主題 trace / supersede / RRF 融合)
+- ✅ part-005 coding_tracker(git + beacon + opencode 三源,真三源 gate 通過)
+- 📋 part-006 stdio MCP(遠端開發迴圈:dev_status/directives 佇列)→ 已設計
+- 📋 part-003.5 唯讀儀表板 → 已設計(排 part-006 slice-1 後)
+- 📋 待使用者環境:四批真 QA(LLM key / Discord token / threads session)
 
 前身專案:[threads-sync](https://github.com/Deo940712/threads-sync)(Threads
-已存貼文 → Obsidian,本專案沿用其管線模式並將整合為第一個 sync skill)。
+已存貼文 → Obsidian,已 vendored 為第一個 sync skill)。

@@ -2,8 +2,8 @@
 
 ## What this repo is
 
-A personal schedule + knowledge-base assistant agent (parts 001-003 + 002.5 done,
-part-004 in progress; 223 tests green). The full architecture decision record is in
+A personal schedule + knowledge-base assistant agent (parts 001-005 + 002.5 + 004.5 all done,
+314 tests green; next: part-006 stdio MCP then part-003.5 dashboard). The full architecture decision record is in
 [ARCHITECTURE.md](ARCHITECTURE.md) — read it before implementing anything.
 Interface layer design authority: [INTERFACES.md](INTERFACES.md).
 Memory system implementation spec (probe-verified platform behavior — READ before
@@ -96,13 +96,11 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
 
 ## Build order (respect the phase gates in ARCHITECTURE.md §10)
 
-DONE: 1 (schema+CRUD), 2 (orchestrator+writer+schedule+remind), 2.5 (Discord bot,
-live QA pending token), 3 (memory core: transcript/health/consolidate/vindex/
-retrieve), 4-slice-001 (threads-sync vendored + runner).
-IN PROGRESS: 4 (curator → recall).
-NEXT: 4.5 memory upgrades (Membox topic traces / Mneme supersede / RRF) → 5
-coding_tracker → 6 MCP dev-loop control (stdio first, then Tailscale HTTP).
-3.5 dashboard and 6-slice-1 (stdio MCP + directives queue) may jump the queue.
+DONE: 1, 2, 2.5, 3, 4 (threads runner + curator + recall), 4.5 (topic traces /
+supersede / RRF), 5 (coding_tracker, live three-source gate passed).
+NEXT (user-decided order): 6-slice-1 (stdio MCP + directives 8th table — touches
+shared stm.py first) → 3.5 (read-only dashboard, zero overlap, shows directives
+panel too) → 6-slice-2 (Tailscale HTTP, gated on VPS).
 Key facts for future sessions:
 - OpenCode session store confirmed readable: `~/.local/share/opencode/opencode.db`
   (SQLite, WAL; tables session/message/part/todo) — open `mode=ro` only.

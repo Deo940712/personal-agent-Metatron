@@ -720,7 +720,7 @@ sequenceDiagram
 ```
 my-agent/
 ├── core/                    # 無狀態核心
-│   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate(未來 +curate)
+│   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate/curate/track
 │   ├── stm.py            ✅ # DB1 存取層(八張表,§5.1)+ CLI
 │   ├── llm.py            ✅ # OpenAI 相容薄層(重試/JSON 模式/降級/events 記錄)
 │   ├── subagents.py      ✅ # 子 agent 執行器(讀契約→組 prompt→單次呼叫→解析)
@@ -733,18 +733,20 @@ my-agent/
 │   ├── consolidate.py    ✅ # 夜間蒸餾:分組→LLM→五條驗證→筆記→archived→vindex
 │   ├── vindex.py         ✅ # 檢索索引:FTS5 trigram + vec0 + note_map;rebuild
 │   ├── retrieve.py       ✅ # 四段級聯 + 回血閉環 + rehydrate
-│   ├── curator_pre.py    📋 # part-004:inbox 前處理(hash/去重/欄位補齊)
-│   ├── curate.py         📋 # part-004:curator 管線(評分閘門/配額)
-│   ├── recall.py         📋 # part-004:代理型問答(工具迴圈+引用)
-│   ├── octools.py        📋 # part-006:opencode.db 唯讀讀取器(=part-005 掃描器)
+│   ├── curator_pre.py    ✅ # inbox 前處理(hash/依日期去重/欄位補齊)
+│   ├── curate.py         ✅ # curator 管線(評分閘門 4.0/配額/manual_tags 守衛)
+│   ├── recall.py         ✅ # 代理型問答(工具迴圈/引用程式面驗證/回血)
+│   ├── track.py          ✅ # coding_tracker 管線(三源→LLM→project_update)
+│   ├── scanners.py       ✅ # git_scan + beacon_scan(唯讀、全容錯)
+│   ├── octools.py        ✅ # opencode.db 唯讀讀取器(mode=ro;兼 part-006 資料層)
 │   └── mcp/tools.py      📋 # part-006:MCP 工具定義(與傳輸無關)
 ├── agents/                  # 子 agent 契約:prompt + 輸出 schema + few-shot
 │   ├── schedule.md       ✅ # 行程解析(rrule/remind 預設/evidence=原句)
-│   ├── consolidator.md   ✅ # 蒸餾(episodic/preference;不得虛構 source)
-│   ├── curator.md        📋 # part-004:評分+分類(閾值/配額)
-│   ├── recall.md         📋 # part-004:代理型(唯讀工具白名單/引用硬規則)
-│   ├── librarian.md      📋 # part-004+:vault 維護(§4.3)
-│   └── coding_tracker.md 📋 # part-005:三源綜合
+│   ├── consolidator.md   ✅ # 蒸餾(episodic/preference/topic/supersedes)
+│   ├── curator.md        ✅ # 評分+分類(閾值 4.0/誠實評分/evidence)
+│   ├── recall.md         ✅ # 代理型(唯讀工具白名單/引用硬規則/superseded_by)
+│   ├── coding_tracker.md ✅ # 三源綜合(beacon 最高權威)
+│   └── librarian.md      📋 # backlog-017:vault 維護(§4.3;vault 有量再做)
 ├── channels/                # 介面層(INTERFACES.md):薄 adapter 零業務邏輯
 │   ├── discord_bot.py    ✅ # 白名單 fail-closed/按鈕/DM/延遲 import
 │   ├── mcp_stdio.py      📋 # part-006:本機 stdio MCP
@@ -757,7 +759,7 @@ my-agent/
 │   └── fb_sync/          📋 # 最後做,先 probe
 ├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
 ├── docs/MEMORY-{zh,en}.md ✅ # 記憶系統實作規格(雙語)
-├── tests/                ✅ # 223+ tests(15 檔)
+├── tests/                ✅ # 314 tests(18 檔)
 └── data/                    # (在 DATA_DIR=C:\Users\tcart\my-agent-data,不 commit)
     ├── state.db             # DB1
     ├── index.db             # 向量索引(衍生物)

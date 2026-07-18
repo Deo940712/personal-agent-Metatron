@@ -293,3 +293,90 @@ def tick(db: Path | None = None, now_ts: int | None = None, _api=None) -> dict:
 
     advance_baseline(db, now)
     return stats
+
+
+# ── push / action→confirm / 校準回饋(part-009-slice-002)────────────────
+
+_PRIORITY_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def push_candidates(db: Path | None, now_ts: int | None = None) -> list[dict]:
+    """取應主動推播的 pending advice(priority ≥ ADVICE_PUSH_MIN_PRIORITY,未過期)。
+
+    只回候選;實際推播與標記 pushed 由 caller(job_advise)做,以便注入
+    notify_fn(Discord DM / console)。
+    """
+    now = now_ts if now_ts is not None else stm.now()
+    floor = _PRIORITY_RANK[config.ADVICE_PUSH_MIN_PRIORITY]
+    return [a for a in stm.advice_list(db, state="pending", now_ts=now)
+            if _PRIORITY_RANK[a["priority"]] >= floor]
+
+
+def format_advice(advice: dict) -> str:
+    """advice → 人可讀推播文(含 id,供使用者回饋定址)。"""
+    return (f"[建議 #{advice['id']} · {advice['priority']}] "
+            f"{advice['observation']}\n→ {advice['suggestion']}")
+
+
+def apply_action(db: Path | None, advice_id: int, action_index: int,
+                 confirm_fn, transcript_dir: Path | None = None):
+    """執行 advice 附帶的一鍵 action(標準 proposal)——**走 writer + 確認**。
+
+    advice 永不自己行動;action 落地與任何一般 proposal 同路徑(preview→confirm→
+    writer)。回 writer.Result;無此 action → None。
+    """
+    from core import writer
+    advice = stm.advice_get(db, advice_id)
+    if advice is None or not advice.get("actions"):
+        return None
+    import json
+    actions = json.loads(advice["actions"])
+    if not 0 <= action_index < len(actions):
+        return None
+    proposal = actions[action_index].get("proposal")
+    if not isinstance(proposal, dict):
+        return None
+    return writer.apply(proposal, confirm_fn, db, transcript_dir)
+
+
+def record_feedback(db: Path | None, advice_id: int, accepted: bool,
+                    transcript_dir: Path | None = None) -> dict:
+    """使用者接受/忽略建議 → 回饋校準閉環。
+
+    - 標記 advice state(accepted / ignored)。
+    - 產生 preference facet 證據:記一筆 event(進冷儲存)並走 writer 產
+      profile_facet,facet_key = advice 的 dedup_key(把「使用者對這類建議的
+      態度」累積成偏好)。value = accept|ignore。重複 → reinforce → 越用越準;
+      忽略某類累積 → 降頻訊號(未來 push 可讀此 facet)。
+    走 writer 全驗證;不繞過。回統計 dict。
+    """
+    from core import writer
+    advice = stm.advice_get(db, advice_id)
+    if advice is None:
+        return {"ok": False, "reason": "advice not found"}
+    stm.advice_set_state(db, advice_id, "accepted" if accepted else "ignored")
+
+    dedup_key = advice.get("dedup_key") or f"advice_{advice_id}"
+    facet_key = f"advice_pref__{dedup_key}"
+    value = "accept" if accepted else "ignore"
+    # 回饋事件進冷儲存,取得可驗證的 evidence id
+    eid = stm.event_append(db, "user", "decision",
+                           f"advice #{advice_id} {value} ({dedup_key})")
+    from core import transcript
+    transcript.append(transcript_dir, f"evt:{eid}", "event_raw",
+                      {"summary": f"advice feedback {value} for {dedup_key}"},
+                      ts=stm.now())
+    existing = stm.facet_get_active(db, "preference", facet_key)
+    action = "reinforce" if existing else "create"
+    proposal = {
+        "agent": "advisor",
+        "proposal_type": "profile_facet",
+        "target": f"facet:preference/{facet_key}",
+        "payload": {"action": action, "facet_class": "preference",
+                    "facet_key": facet_key, "value": value,
+                    "evidence_ids": [f"evt:{eid}"]},
+        "confidence": 0.7,
+        "evidence": [f"advice feedback {value}"],
+    }
+    res = writer.apply(proposal, None, db, transcript_dir)
+    return {"ok": res.ok, "state": value, "facet": res.detail}

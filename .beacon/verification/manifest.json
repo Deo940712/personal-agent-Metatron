@@ -185,6 +185,21 @@
             "On a fresh empty DB call advisor.tick with a fake LLM and confirm quiet=True and the fake LLM was never called (zero cost).",
             "Add one overdue task, call advisor.tick with a fake LLM returning one valid advice, and confirm one advice lands and `advices list` shows it; verify a second tick with the same dedup_key within the window is skipped."
           ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_advisor_push.py tests/test_discord.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Add one overdue task, run `python -m core.agent --job advise` (mock or real LLM), and confirm a medium/high advice is produced and printed (console notify); confirm advices list shows it as pushed.",
+            "Call advisor.record_feedback(db, advice_id, accepted=True) and confirm a preference facet advice_pref__<dedup>=accept is created through the writer; repeat with accepted=False on a same-dedup advice and confirm it reinforces the facet.",
+            "Call advisor.apply_action with confirm_fn returning False and confirm the action does NOT land; with True confirm it lands via the writer."
+          ]
         }
       }
     },

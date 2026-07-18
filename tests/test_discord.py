@@ -47,6 +47,25 @@ def test_decode_rejects_foreign_custom_id():
     assert bot.decode_custom_id("mycfg:1:y:extra") is None   # 欄位過多
 
 
+@pytest.mark.parametrize("aid,accepted", [(1, True), (7, False), (500, True)])
+def test_advice_id_roundtrip(aid, accepted):
+    cid = bot.encode_advice_id(aid, accepted)
+    assert bot.decode_advice_id(cid) == (aid, accepted)
+
+
+def test_advice_and_confirm_ids_dont_collide():
+    # advice 回饋按鈕不得被 confirm 解碼器誤認,反之亦然
+    assert bot.decode_custom_id(bot.encode_advice_id(1, True)) is None
+    assert bot.decode_advice_id(bot.encode_custom_id(1, True)) is None
+
+
+def test_decode_advice_rejects_foreign():
+    assert bot.decode_advice_id("otherbot:1:a") is None
+    assert bot.decode_advice_id("myadv:abc:a") is None
+    assert bot.decode_advice_id("myadv:1:maybe") is None
+    assert bot.decode_advice_id("myadv:1") is None
+
+
 def test_encode_rejects_nonpositive_id():
     """audit D2:pending_id 是 AUTOINCREMENT 永遠正;encode/decode 對稱契約。"""
     with pytest.raises(ValueError, match="positive"):

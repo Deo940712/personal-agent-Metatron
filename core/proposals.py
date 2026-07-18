@@ -15,7 +15,7 @@ from typing import Any
 # ── 常數(§3.1 對照表)────────────────────────────────────────────────
 
 KNOWN_AGENTS = {"schedule", "curator", "librarian", "coding_tracker", "orchestrator",
-                "consolidator"}
+                "consolidator", "advisor"}
 
 # part-007:profile_facet 提案(consolidator 蒸餾偏好 / orchestrator 顯式指示)
 FACET_ACTIONS = {"create", "reinforce", "supersede"}

@@ -241,10 +241,37 @@ def job_track(db: Path | None = None) -> int:
         return 2
 
 
+def job_advise(db: Path | None = None,
+               notify_fn: Callable[[str], None] = print) -> int:
+    """主動建議入口(part-009;委派 advisor.tick + push)。
+
+    tick 產建議(quiet 零 LLM)→ 取 medium/high pending advice → notify_fn 推播
+    (Discord DM / console)→ 標記 pushed。advice 只建議;action 落地仍走確認。
+    """
+    from core import advisor                    # 延遲 import:remind 路徑不載 llm
+    run_id = _run_start(db, "scheduler")
+    try:
+        stats = advisor.tick(db=db)
+        pushed = 0
+        for advice in advisor.push_candidates(db):
+            notify_fn(advisor.format_advice(advice))
+            stm.advice_set_state(db, advice["id"], "pushed")
+            pushed += 1
+        stats["pushed"] = pushed
+        _run_finish(db, run_id, "ok", summary=f"advise {stats}")
+        print(f"OK: {stats}")
+        return 0
+    except Exception as e:                      # noqa: BLE001 — 頂層防線
+        _run_finish(db, run_id, "error", error=f"{type(e).__name__}: {e}")
+        print(f"ERROR: {e}")
+        return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.agent", description=__doc__)
     parser.add_argument("text", nargs="?", default=None, help="自然語言指令")
-    parser.add_argument("--job", choices=["remind", "consolidate", "curate", "track"],
+    parser.add_argument("--job",
+                        choices=["remind", "consolidate", "curate", "track", "advise"],
                         default=None, help="排程 job")
     parser.add_argument("--db", type=Path, default=None)
     parser.add_argument("--yes", action="store_true", help="跳過確認(測試/腳本用)")
@@ -258,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
         return job_curate(args.db)
     if args.job == "track":
         return job_track(args.db)
+    if args.job == "advise":
+        return job_advise(args.db)
     if not args.text:
         parser.error("需要自然語言指令或 --job")
     # 裂縫1:CLI 走統一入口 application.invoke,同步 confirm(給 confirm_fn)。

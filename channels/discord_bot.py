@@ -17,6 +17,8 @@ from core.application import InvocationContext, invoke
 
 # 按鈕 custom_id 前綴:'mycfg:<pending_id>:<y|n>'
 _CUSTOM_PREFIX = "mycfg"
+# advice 回饋按鈕:'myadv:<advice_id>:<a|i>'(accept / ignore;part-009-slice-002)
+_ADVICE_PREFIX = "myadv"
 
 
 # ── 純函式(可單元測試,零 discord 依賴)──────────────────────────────
@@ -52,6 +54,23 @@ def decode_custom_id(custom_id: str) -> tuple[int, bool] | None:
     if parts[2] not in ("y", "n"):
         return None
     return int(parts[1]), parts[2] == "y"
+
+
+def encode_advice_id(advice_id: int, accepted: bool) -> str:
+    """advice 回饋按鈕 custom_id(part-009-slice-002)。"""
+    if advice_id < 1:
+        raise ValueError(f"advice_id must be positive: {advice_id}")
+    return f"{_ADVICE_PREFIX}:{advice_id}:{'a' if accepted else 'i'}"
+
+
+def decode_advice_id(custom_id: str) -> tuple[int, bool] | None:
+    """解析 advice 回饋按鈕 → (advice_id, accepted)。非本 bot 的 → None。"""
+    parts = custom_id.split(":")
+    if len(parts) != 3 or parts[0] != _ADVICE_PREFIX or not parts[1].isdigit():
+        return None
+    if parts[2] not in ("a", "i"):
+        return None
+    return int(parts[1]), parts[2] == "a"
 
 
 def token() -> str:
@@ -103,14 +122,35 @@ def build_client():
             return
         if not is_authorized(interaction.user.id, allowed):
             return
-        decoded = decode_custom_id(interaction.data.get("custom_id", ""))
-        if decoded is None:
-            return  # 非本 bot 的按鈕
-        pending_id, approve = decoded
-        reply = chat.confirm(pending_id, approve)
-        await interaction.response.send_message(reply.text)
+        custom_id = interaction.data.get("custom_id", "")
+        decoded = decode_custom_id(custom_id)
+        if decoded is not None:
+            pending_id, approve = decoded
+            reply = chat.confirm(pending_id, approve)
+            await interaction.response.send_message(reply.text)
+            return
+        # part-009:advice 回饋按鈕(accept / ignore)→ 校準回饋閉環
+        adv = decode_advice_id(custom_id)
+        if adv is not None:
+            from core import advisor
+            advice_id, accepted = adv
+            advisor.record_feedback(None, advice_id, accepted)
+            await interaction.response.send_message(
+                "已記錄:採納" if accepted else "已記錄:略過")
+            return
+        # 非本 bot 的按鈕
 
     return client
+
+
+def advice_feedback_view(advice_id: int):
+    """advice DM 的採納/略過按鈕(part-009-slice-002;job_advise 推播用)。"""
+    import discord
+    view = discord.ui.View(timeout=None)
+    for label, accepted in (("採納 ✅", True), ("略過 🚫", False)):
+        view.add_item(discord.ui.Button(
+            label=label, custom_id=encode_advice_id(advice_id, accepted)))
+    return view
 
 
 async def send_dm(user_id: int, text: str) -> None:

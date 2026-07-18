@@ -92,7 +92,9 @@ Done gate:
 
 ### part-009-slice-002: Discord 推播 + action→confirm + 校準回饋 + job 接線
 
-Status: planned
+Status: done (2026-07-19; snapshot: `.beacon/done/part-009/part-009-slice-002-done-current.md`)
+735 tests 綠(基線 716 + 19);端到端 manual QA(advice → push → 校準回饋 → facet)通過。
+part-009 三 slice 全數完成。真 Discord 連線 QA 待 token。
 
 Goal: advice 主動推 Discord + action 走 preview→confirm→writer + 接受/忽略回饋
 成 part-007 facet 證據 + `--job advise` CLI/cron 接線。
@@ -102,16 +104,16 @@ Outcome: `advise` job 跑 tick → medium/high advice 推 Discord DM（含 actio
 preference facet 證據（校準閉環）。
 
 Candidate scope:
-- [ ] `core/agent.py`：`job_advise` + `--job advise`（延遲 import advisor）
-- [ ] `core/advisor.py`：`push_candidates(db)` 取 medium/high pending advice；
-      action 的 proposal 走 application.invoke / writer pending（復用既有確認）
-- [ ] `channels/discord_bot.py`：advice DM 推播 + action 按鈕（復用兩階段確認 UI）
-- [ ] 校準回饋：advice_set_state(accepted/ignored) → 產 preference facet 提案
-      （evidence = advice 的 source；走 writer；忽略某類 → 降頻訊號）
-- [ ] tests：job 接線、push 只取 medium/high、action→confirm 落地（未確認不落地）、
-      回饋產 facet 證據、忽略降頻
-- [ ] Manual QA：塞 events → job advise → Discord 收建議 → 按 action → 確認 → 落地；
-      無變化日 → quiet（無推播）
+- [x] `core/agent.py`：`job_advise` + `--job advise`（tick → push → notify → pushed）
+- [x] `core/advisor.py`：`push_candidates` 取 medium/high pending；`apply_action`
+      走 writer.apply(confirm_fn)（未確認不落地）；`format_advice`
+- [x] `channels/discord_bot.py`：advice 回饋按鈕編解碼（myadv:<id>:<a|i>，不撞碼）+
+      interaction 路由 + `advice_feedback_view`
+- [x] 校準回饋：`record_feedback` → advice state + preference facet 證據
+      （facet_key=advice_pref__<dedup>，走 writer；忽略/接受都記，降頻基礎已建）
+- [x] tests：job 接線/CLI、push 篩選、action→confirm、回饋 accept+ignore+reinforce、
+      走 writer、按鈕 roundtrip（19 tests）
+- [x] Manual QA：端到端（逾期任務 → tick → push → 校準回饋 → facet）通過
 
 Files-scope: core/agent.py, core/advisor.py, channels/discord_bot.py,
 tests/test_advisor_push.py

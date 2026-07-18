@@ -46,7 +46,8 @@ _REGISTRY_LINE = re.compile(
 
 def init_vault(vault: Path) -> None:
     """建立 vault 骨架。idempotent:已存在的不動。"""
-    for sub in ("episodic", "agent/profile", "agent/ops", "agent/sop", "semantic"):
+    for sub in ("episodic", "agent/profile", "agent/ops", "agent/sop", "semantic",
+                "scenarios"):
         (vault / sub).mkdir(parents=True, exist_ok=True)
     index = vault / "INDEX.md"
     if not index.exists():
@@ -93,7 +94,9 @@ def _yaml_scalar(v) -> str:
 
 
 # 合法子目錄白名單(audit S8:防打錯字建野目錄)
-ALLOWED_SUBDIRS = {"episodic", "semantic", "agent/profile", "agent/ops", "agent/sop"}
+# scenarios:part-010 情境演練專區(非事實層,non_authoritative;不進 semantic)
+ALLOWED_SUBDIRS = {"episodic", "semantic", "agent/profile", "agent/ops", "agent/sop",
+                   "scenarios"}
 
 
 def write_note(vault: Path, subdir: str, *, title: str, body: str,

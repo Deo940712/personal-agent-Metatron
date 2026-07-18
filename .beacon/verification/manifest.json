@@ -247,6 +247,50 @@
         }
       }
     },
+    "part-010": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_scenario.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Bucketize a raw value (e.g. sleep 4.7h) and confirm it maps to an ordinal label; build a ScenarioRequest from ordinal buckets and confirm all metrics are in [0,1] with no raw numbers, and that passing a raw float is rejected.",
+            "Store a fake narrative flagged non_authoritative and confirm it lands under vault/scenarios/ (not semantic/) with source=scenario_rehearsal; confirm a narrative without non_authoritative is refused."
+          ]
+        },
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_scenario_run.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-000"
+          ],
+          "manualQa": [
+            "Run scenario.run_rehearsal against the real vendored crowd-scenario subprocess (software_migration pack with all three axes) and confirm it returns non_authoritative=true and lands a note under vault/scenarios/ (not semantic/).",
+            "Read that note via recall._tool_read_note and confirm the result carries _non_authoritative_note flagging it as simulation; confirm a subprocess crash (injected runner) raises ScenarioError, logs a failed event, and leaves core state untouched."
+          ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_scenario_templates.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Seed a few tasks/overdue-tasks/projects, run `python -m core.scenario rehearse personal_schedule --db <db> --vault <vault>` against the real subprocess, and confirm it prints a '模擬演練·非事實' line and lands a note under vault/scenarios/.",
+            "Confirm each template's ScenarioRequest metrics are all in [0,1] with no raw numbers (firewall), and that an empty DB still yields a valid request (all 'none' buckets)."
+          ]
+        }
+      }
+    },
     "part-006": {
       "slices": {
         "slice-000": {

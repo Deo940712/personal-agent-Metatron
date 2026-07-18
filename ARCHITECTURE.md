@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph STORAGE["儲存層"]
-        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>八張表")]
+        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>七張表（directives 為 part-006 [PLANNED]）")]
         DB2[("DB2 Obsidian vault<br/>Markdown 知識介面<br/>semantic/ + episodic/ + agent/")]
         COLD[("冷儲存 transcript<br/>append-only JSONL + .idx<br/>永不刪")]
         VEC[("向量索引<br/>衍生物,可重建")]
@@ -141,6 +141,17 @@ writer.py 驗證規則(全部通過才落地):
 
 ### 3.2 工具層(Tool Registry)
 
+使用者可見能力已收斂到 `core/tools/`；完整 feature → capability → agent →
+interface → permission → storage 配對以 **[docs/TOOLS.md](docs/TOOLS.md)** 為權威，
+程式同源 catalog 為 `core/tools/catalog.py`。這是靜態應用能力邊界，不是動態
+plugin loader；低階 `stm`／SQL／writer dispatch 仍是 private。
+
+本節下方的工具表描述的是 **agent internal tools**（特別是 recall 的迭代唯讀
+白名單），與介面共用的 capability tools 不同。所有 write-capable capability
+只能產 proposal，或沿既有 deterministic writer 驗證路徑落地。這是**單一
+commit boundary**，不是「所有操作都必須由一個 orchestrator process 逐筆代轉」；
+agent allowlist、interface exposure 與 mutation permission 是三個不同政策欄位。
+
 子 agent 分兩型,決定要不要給工具:
 
 | 型 | 子 agent | 工具 | 理由 |
@@ -157,14 +168,18 @@ writer.py 驗證規則(全部通過才落地):
 | `vector.search` | `(query, k) -> [{note_id, score}]` | 讀 | recall(fallback) |
 | `transcript.rehydrate` | `(entry_ids \| time_window \| keyword) -> [原文]` | 讀 | recall |
 | `stm.query` | `(domain, filter) -> rows` | 讀 | orchestrator 組上下文 |
-| `writer.apply` | `(proposal) -> ok\|rejected` | **寫(唯一)** | 只有 orchestrator |
+| `writer.apply` | `(proposal) -> ok\|rejected` | **共享狀態 commit boundary** | deterministic gateway/orchestrator/job 內部；不直接暴露給 LLM |
 | `notify.send` | `(message, channel) -> ok` | 外部 | 只有 remind job |
 | `git.scan` | `(repo_path) -> {last_commit_at, recent_commits[]}` | 讀 | coding_tracker 輸入收集 |
 | `beacon.scan` | `(repo_path) -> {current_slice, status, done[], backlog_count}` | 讀 | coding_tracker 輸入收集 |
 | `opencode.sessions` | `(project_path) -> [{session_id, last_at, summary}]` | 讀 | coding_tracker 輸入收集 |
 | `vault.scan` | `() -> {orphans[], broken_links[], dupes[], bad_tags[], index_drift[], stale[], orphan_attachments[], raw_dump_aging[]}` | 讀 | librarian Phase A(確定性掃描;含 data/ 附屬掃描) |
 
-硬規則:**寫入面只有 `writer.apply` 一個**;其餘全部唯讀。子 agent 的工具白名單寫死在 `agents/*.md`。
+硬規則：LLM 子 agent 不持有 raw SQL、DB connection、任意 vault/file write 或裸
+`writer.apply`。它們可依靜態 allowlist 直接呼叫 scoped read/propose/auto-apply
+capability；`auto_apply` 仍走 writer 驗證。Metatron 是 control plane，capability
+gateway + writer 是 data/commit plane。現行 agent internal allowlist 由程式碼硬控，
+`agents/*.md` 是契約說明，不是唯一執行時 enforcement。
 
 **危險操作閘門**(借鑑 Hermes 的 approval 分層,適配本專案規模):
 
@@ -208,8 +223,9 @@ flowchart LR
 | 網頁儀表板(FastAPI+htmx,127.0.0.1) | 在家:總覽 + 系統健康 | **唯讀**(`mode=ro`) | Phase 3.5 |
 | MCP server | OpenCode 內查詢 | 唯讀優先 | Phase 6 |
 
-鐵律:channel = 薄 adapter 零業務邏輯;共用 `invoke(text, trigger, reply_to)`;
-寫入不因來源開後門;**提醒通知管道 = Discord DM(開放決策已解)**。
+鐵律:channel = 薄 adapter 零業務邏輯，先共用 `core/tools/` 能力層；統一
+`application.invoke` 是 part-006 slice-001 的下一步。寫入不因來源開後門；
+**提醒通知管道 = Discord DM(開放決策已解)**。
 
 ### 3.5 MCP 規劃
 
@@ -230,11 +246,12 @@ MCP server **一套工具、兩種傳輸**(part-006 定案):`core/mcp/tools.py` 
 來源是 MCP 而繞過 writer + 確認。** 遠程走 Tailscale 私有網路後,recall 全文的
 內容分級(§4.1)解除。
 
-## 4. 記憶模型:四層 × 三時間尺度
+## 4. 記憶模型：已實作儲存／檢索 + 待評估 context continuity
 
-記憶按**性質**分四層(語義按受眾、程序按來源各再分二),按**生命週期**用三時間尺度管理
-(借鑑 [memory-river](https://github.com/Hsi431/memory-river))。
-**Session(對話逐字稿)不是記憶,預設不保存。**
+目前已實作的是按性質分工的記憶類別、四種實體儲存角色、健康值生命週期與四段
+檢索。UI session 可以長時間存在，但 core 每則訊息仍建立獨立 run；UI 對話不是
+權威狀態，也不預設把整段歷史重播進 prompt。完整契約與 A/B/C/D 候選比較見
+**[docs/MEMORY-zh.md](docs/MEMORY-zh.md)** / **[docs/MEMORY-en.md](docs/MEMORY-en.md)**。
 
 | 層 | 回答的問題 | 存哪 | 生命週期 |
 |---|---|---|---|
@@ -257,6 +274,22 @@ flowchart LR
 ```
 
 **核心原則:壓縮永不等於丟失**——每條蒸餾記憶留有回溯路徑,摘要錯了可重蒸餾。
+
+### 4.0 多層記憶決策狀態（尚未定案）
+
+「儲存分層」「檢索階段」「跨 run 任務 continuity」「LLM 自主 paging」是四個不同
+概念，不能都稱為多層記憶。目前決策序列如下：
+
+| 方案 | 狀態 | 內容 |
+|---|---|---|
+| A 現況 | `[IMPLEMENTED]` | 無狀態 run + 從權威資料重建 + 按需檢索 |
+| B Task Capsule | `[CANDIDATE]` | A + 結構化 goal/constraints/decisions/open-loops checkpoint |
+| C 受控 warm set | `[CANDIDATE]` | B + deterministic task-scoped cache/eviction |
+| D LLM 自主 paging | `[CANDIDATE]` | C + STM↔MTM↔LPM 自主管理；須實測勝過 C |
+
+先驗證 A 是否有可重現缺陷，再依序評估 B、C、D。B/C/D 均未授權實作；D 也不是
+永久拒絕，而是證據門檻最高。Task Capsule 若採用，只保存結構化 checkpoint 與
+evidence references，不保存 chain-of-thought 或完整聊天。
 
 ### 4.1 健康值代謝(取代硬 TTL)
 
@@ -347,7 +380,7 @@ flowchart LR
 
 ## 5. 資料模型
 
-### 5.1 DB1 `state.db` 完整 DDL(八張表)
+### 5.1 DB1 `state.db` 完整 DDL(七張表已實作;directives 為 part-006 [PLANNED])
 
 ```sql
 -- 行程 (免疫衰減)
@@ -447,6 +480,7 @@ CREATE TABLE pending_proposals (
 CREATE INDEX idx_pending_status ON pending_proposals(status);
 
 -- 遠端指令佇列 (part-006 slice-1 實作;目前 stm 為七表,此表隨 part-006 加入)
+-- [PLANNED] directives:part-006-slice-002 才建立,目前 DB1 尚無此表
 CREATE TABLE directives (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   project      TEXT    NOT NULL,          -- 目標專案 (對應 projects.name 或路徑)
@@ -726,7 +760,7 @@ sequenceDiagram
 my-agent/
 ├── core/                    # 無狀態核心
 │   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate/curate/track
-│   ├── stm.py            ✅ # DB1 存取層(八張表,§5.1)+ CLI
+│   ├── stm.py            ✅ # DB1 存取層(七表已實作;directives [PLANNED],§5.1)+ CLI
 │   ├── llm.py            ✅ # OpenAI 相容薄層(重試/JSON 模式/降級/events 記錄)
 │   ├── subagents.py      ✅ # 子 agent 執行器(讀契約→組 prompt→單次呼叫→解析)
 │   ├── proposals.py      ✅ # 提案信封 + payload 驗證(§3.1)
@@ -764,7 +798,7 @@ my-agent/
 │   └── fb_sync/          📋 # 最後做,先 probe
 ├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
 ├── docs/MEMORY-{zh,en}.md ✅ # 記憶系統實作規格(雙語)
-├── tests/                ✅ # 314 tests(18 檔)
+├── tests/                ✅ # 326 tests
 └── data/                    # (在 DATA_DIR=C:\Users\tcart\my-agent-data,不 commit)
     ├── state.db             # DB1
     ├── index.db             # 向量索引(衍生物)
@@ -804,6 +838,9 @@ flowchart LR
   prompt 契約 + JSON 提案解析;不用 LangGraph/SDK)
 - ~~提醒通知管道~~ 已定案:**Discord DM**(私人 server;INTERFACES.md §4);本機開發期用 console 過渡
 - 健康值代謝參數(衰減率、回血量、trash 保留天數)——part-003 實測調校
+- 多層 context：目前只有 A（無狀態重建 + 按需檢索）已實作；是否採 B Task
+  Capsule、C task-scoped warm set、D LLM 自主 paging，依
+  [記憶契約](docs/MEMORY-zh.md#5-評估中的多層記憶方案) 的真實 workload gate 決定
 - x_sync Capture 層:xarchive 匯出(手動、快)→ 自動化再評估 GraphQL 攔截
 
 ## 12. 設計依據(論文與實作)
@@ -815,7 +852,7 @@ flowchart LR
 | 長期記憶 = 互連 markdown 筆記 | A-MEM (arXiv 2502.12110, 2025):卡片式互連筆記,與 Obsidian 同構 |
 | 六原語(Consolidation/Indexing/Updating/Forgetting/Retrieval/Compression)各有歸屬 | 記憶操作綜述 (arXiv 2505.00675, 2025) |
 | 行程/進度事實帶時間有效期 | Zep/Graphiti (2025):temporal KG,valid_from / invalid_at |
-| **不做**多層分頁換頁(STM→MTM→LPM) | Anatomy of Agentic Memory (2026) 實測:分層換頁延遲 30 倍;輕量 append-only + 好索引 <1.1s |
+| 多層 context 採 A→B→C→D 實測決策 | 現有研究中的換頁延遲是反對直接跳到 D 的證據，不足以永久排除 B/C 或局部 paging；真實 workload 指標決定 |
 | 三時間尺度 + 回水(rehydrate) | [memory-river](https://github.com/Hsi431/memory-river) (2026):capsule/notes/transcript,蒸餾產物帶 sourceEntryIds 可回讀原文 |
 | 健康值代謝取代硬 TTL | memory-river + MemoryBank (2024):遺忘曲線,命中回血、核心類別免疫 |
 | index-first 檢索 | DesktopCommanderMCP knowledge-base skill:INDEX 一行描述挑筆記,不掃全庫 |
@@ -823,7 +860,7 @@ flowchart LR
 | 危險操作閘門分層(硬底線/需確認/自動放行/fail-closed) | Hermes Agent Security:hardline blocklist + approval modes + timeout=deny |
 | 評分閘門 + 分類配額 | [Horizon](https://github.com/Thysrael/Horizon) (2026):AI 評分 + 閾值 + category_groups |
 | Orchestrator + 無狀態子 agent | LangGraph supervisor / Claude Agent SDK subagents / OpenAI Agents SDK triage 收斂拓撲 (2026) |
-| Agent 提議、程式驗證、單一 writer | memory-river 夜間鞏固的 LLM 決策欄位級驗證 + 多 agent 資料競爭防護 |
+| Agent 可呼叫 scoped capability、程式驗證、單一 commit boundary | 將 tool autonomy 與 shared-state authority 分離；避免 orchestrator 成為 data-plane proxy，同時保留驗證/確認/稽核 |
 | 中文拆卡方法論(curator)、週回顧蒸餾 | [twhsi/skills](https://github.com/twhsi/skills) (2026):fire-analysis-card 四層結構、weekly-reverse-review;方法論進 prompt 契約不改 core(backlog-019/020) |
 | 主題連續性蒸餾(part-004.5) | [Membox](https://arxiv.org/abs/2601.03785) (2026):同主題聚盒+跨天 trace,temporal F1 +68%;批判 fragmentation-compensation 範式(backlog-022) |
 | 矛盾偵測+supersede 執行(part-004.5) | Mneme (2026):雙側保留+檢索 co-surface+contradiction-first read,矛盾解析 0.66 vs Mem0 0.22(backlog-023) |
@@ -847,3 +884,59 @@ flowchart LR
 1. **核心無狀態**:所有狀態只活在 DB1。子 agent 中間過程留在子 context,orchestrator 只收摘要——雙重隔離。
 2. **技能 = 獨立 CLI 管線**:每個功能獨立、idempotent、可單獨執行。core 只做路由 + 讀寫 DB。壞一個不倒全部。
 3. **記憶單向流**:DB1 低健康條目 → 夜間蒸餾 → DB2(append-only)。core 永不直接持有長期記憶,用檢索取用。
+
+## 15. 自適應助理層(part-007+,規劃中)
+
+> 目標:讓 Metatron 從「幾條各自成熟的管線」進化成「熟悉你、會主動建議、能演練未來」的
+> 助理——但**不變成 OpenHuman 式常駐自主 agent**。「活」= 定期醒來看變化、產可過期建議、
+> 真實行動仍走確認,不是背景無限自我思考、不是自主改狀態。設計依據見各 part DESIGN。
+
+### 15.1 四個能力(在既有安全邊界內)
+
+```
+              ┌────────────────────────┐
+              │ Metatron Invocation Core│  無狀態、單次呼叫(不變)
+              │ application.invoke()     │  part-006 slice-001 統一入口 [PLANNED]
+              └───────────┬────────────┘
+      ┌───────────────────┼─────────────────────┐
+      ▼                   ▼                     ▼
+┌───────────┐    ┌────────────────┐    ┌─────────────────┐
+│Personal   │    │Knowledge Scout │    │Proactive Advisor│
+│Model       │    │網路知識取得      │    │/ Subconscious   │
+│(part-007) │    │(part-008)      │    │(part-009)       │
+└─────┬─────┘    └───────┬────────┘    └────────┬────────┘
+      │ DB1 profile_facets│ inbox+curator+writer │ advice(可過期)
+      │ → vault/agent/    │ external_untrusted    │ action → confirm
+      ▼                   ▼                       ▼
+              ┌─────────────────────┐
+              │ Scenario Rehearsal  │  crowd-scenario vendored(part-010)
+              │ 只吃 bucket seed     │  MiroFish 未來隔離(part-011)
+              │ 只回 advisory 報告   │  永不讀寫 DB1/vault 原文
+              └─────────────────────┘
+```
+
+| 能力 | 做什麼 | 存哪 | 安全邊界 |
+|---|---|---|---|
+| **Personal Model** | 學偏好/作息/流程,證據驅動 stability facets | DB1 `profile_facets` → 投影 vault/agent/profile | 一次行為不 stable;pin/forget 硬覆蓋;走 writer;不改行程 |
+| **Knowledge Scout** | opt-in + allowlist 網路研究 | inbox → curator → writer → vault | web = 資料非指令;`external_untrusted` 標籤;不直接寫入 |
+| **Proactive Advisor** | cron world-diff → 可過期建議 | DB1 `advices` + Discord 推播 | quiet tick 不燒 LLM;只建議;action 走 confirm;有配額/過期 |
+| **Scenario Rehearsal** | 演練「如果…會怎樣」 | vault/scenarios/(非事實層) | 只吃 bucket;硬標 non_authoritative;subprocess 隔離 |
+
+### 15.2 三條新增鐵律(延續既有哲學)
+
+1. **模型層與行動層分離**:Personal Model / Advisor / Scenario 只產**知識與建議**;
+   任何真實副作用(改行程/待辦/vault)一律走 writer + 確認。建議不是命令。
+2. **外部輸入皆不受信任**:網路內容、模擬輸出永遠是 data,不是 instruction。
+   web 標 `external_untrusted`、經 curator+writer;scenario 標 non_authoritative、
+   存專區不進事實層。防 prompt injection 是硬規則不是選項。
+3. **「活」有邊界**:cron 驅動(不是永動)、world-diff quiet-tick(無變化不燒 LLM)、
+   失敗不推進 baseline、建議可過期。拒絕 OpenHuman 式常駐 agent graph / 三層 subagent /
+   自主寫入(backlog-027)。
+
+### 15.3 外部系統選型(2026-07-14 定案)
+
+| 系統 | 授權 | 定位 | 決定 |
+|---|---|---|---|
+| [crowd-scenario](https://github.com/Deo940712/crowd-scenario) | MIT | 小型確定性情境演練(你自己的 repo) | **vendored 釘版 + subprocess**(part-010) |
+| [OpenHuman](https://github.com/tinyhumansai/openhuman) | GPL-3.0 | 大型桌面 Agent OS | **只借概念,不接程式碼**(backlog-027) |
+| [MiroFish](https://github.com/666ghj/MiroFish) | AGPL-3.0 | 大型多人社會模擬 | **未來 opt-in 隔離 adapter**(backlog-028) |

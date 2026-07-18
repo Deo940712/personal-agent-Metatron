@@ -1,184 +1,326 @@
-# Memory System Technical Specification (part-003)
+# Metatron Memory Architecture Contract
 
-> Language: English | 繁體中文: [MEMORY-zh.md](MEMORY-zh.md)
-> Design authority: [ARCHITECTURE.md](../ARCHITECTURE.md) §4/§5/§6. This document is the
-> implementation-level spec, including probe-verified platform behavior
-> (2026-07-13, Windows / Python 3.12 / SQLite 3.45 / sqlite-vec 0.1.9).
+> 繁體中文: [MEMORY-zh.md](MEMORY-zh.md)  
+> System-level authority: [ARCHITECTURE.md](../ARCHITECTURE.md); capability policy:
+> [TOOLS.md](TOOLS.md). This document records both implemented contracts and candidates
+> that still require empirical evaluation.
 
-## 1. System Overview
+## 1. Contract and Decision Status
 
-```
-events (DB1)                     vault (DB2)                index.db (derived)
-alive ──decay──> trash ──14d──> distill ──> episodic/*.md ──> FTS5 + vec0
-  │                │                          │ source_ids
-  │                └─raw dump──> transcript/ <┘ (rehydrate)
-  └─retrieval hit─> heal (on_hit)
-```
+### 1.1 Status labels
 
-Four storage roles (§2): DB1 = System of Record; vault = human knowledge
-interface; transcript = raw records (never deleted); index.db = derived,
-fully rebuildable.
-
-## 2. Cold Storage Transcript (`core/transcript.py`)
-
-### 2.1 File Format
-
-```
-data/transcript/
-├── 2026-07.jsonl        # monthly rotation (filename = %Y-%m of fromtimestamp(ts))
-└── 2026-07.jsonl.idx    # index: entry_id<TAB>byte_offset<TAB>length
-```
-
-One JSONL line per entry (§5.3):
-
-```jsonc
-{"entry_id": "evt:123", "ts": 1752300000, "kind": "event_raw", "payload": {...}}
-// entry_id namespaces: evt:<events.id> | raw:<pipeline>:<post_id>
-// kind: event_raw | sync_raw | llm_io
-```
-
-### 2.2 API
-
-| Function | Behavior |
+| Label | Meaning |
 |---|---|
-| `append(db_dir, entry_id, kind, payload, ts)` | Write one JSONL line + one .idx line synchronously; returns entry_id |
-| `read_by_ids(db_dir, entry_ids)` | O(1) seek via .idx; missing ids reported, never raised |
-| `read_by_time(db_dir, start_ts, end_ts)` | Linear scan across monthly files (ts ordered within a file) |
-| `read_by_keyword(db_dir, keyword, limit)` | Full linear scan (measured: 10k lines in 17ms — fine at personal scale) |
-| `rebuild_idx(db_dir, month)` | Rebuild .idx by rescanning JSONL (crash self-healing; .idx is derived) |
+| `[IMPLEMENTED]` | The code, store, or flow exists now and has test or probe evidence |
+| `[CANDIDATE]` | An option that may be evaluated; it is not authorized or selected |
+| `[PLANNED]` | A concrete PART/slice exists, but the behavior is not complete |
+| `[NON-GOAL]` | Explicitly excluded; this is not a synonym for “undecided” |
 
-### 2.3 Invariants
+### 1.2 Current conclusion
 
-1. **Append-only**: no function may rewrite existing lines; no delete API exists
-2. Corrupt/stale .idx → `rebuild_idx`; the JSONL is the single source of truth
-3. Write order: JSONL flush first, then .idx — worst case after a crash is a
-   short .idx (rebuildable); the .idx never points at data that doesn't exist
+- `[IMPLEMENTED]` Four physical storage roles, health lifecycle, distillation,
+  four-stage retrieval, and rehydration.
+- `[IMPLEMENTED]` Every core invocation is independent. Continuity comes from
+  authoritative stores, not an accumulated replay of an entire chat.
+- `[CANDIDATE]` Task Capsule, task-scoped warm set, and LLM-managed paging. The
+  A/B/C/D comparison is defined, but **multi-layer context is undecided**.
+- `[NON-GOAL]` A resident conversation brain, automatic whole-chat replay without
+  validation, physical deletion of raw evidence, or raw SQL/DB/file write primitives
+  held by an LLM.
 
-## 3. Health Metabolism (`core/health.py`)
+**MEM-01 — Stateless core.** A UI may keep a long connection or conversation, but
+each message creates an independent core run. The UI session is not authoritative
+memory, and “the latest session” cannot identify the active task.
 
-### 3.1 Parameters (config.py, tunable)
+**MEM-07 — Honest decision state.** A is implemented; B, C, and D are
+`[CANDIDATE]`. Documentation, code, and interfaces must neither present candidates as
+adopted nor turn an undecided option into a permanent rejection.
 
-| Constant | Initial | Meaning |
+## 2. Identity, Lifetime, and Authority
+
+### 2.1 Identities are not interchangeable
+
+| Identity | Lifetime | Current realization |
 |---|---|---|
-| `HEALTH_DECAY_PER_DAY` | 0.05 | linear daily decay (1.0 → 0 in 20 days) |
-| `TRASH_RETENTION_DAYS` | 14 | trash retention (referenced within = revived) |
+| UI/session id | One channel or developer-tool interaction | May exist externally; not a core SoR |
+| `run_id` | One invocation or job execution | `[IMPLEMENTED]` as `agent_runs.id` |
+| `task_id` | User work spanning multiple runs | `[IMPLEMENTED]` personal todos use `tasks.id`; development uses a Beacon slice id; no generic capsule id exists |
+| `job_id` | A resumable background work instance | `[PLANNED]` no generic persisted schema; current correlation uses run trigger/cursor |
+| `pending_id` | One mutation awaiting confirmation | `[IMPLEMENTED]` as `pending_proposals.id` |
+| `source_id` | Location of raw evidence | `[IMPLEMENTED]` transcript namespace such as `evt:123` |
+| `evidence_id` | Standalone evidence object | `[PLANNED]` no separate schema; current code uses `source_ids` and evidence strings |
 
-Event lifecycle: written (health=1.0) → untouched for 20 days → trash → 14 days
-→ distilled/archived. Total ≈ 34 days (probe P7).
+One UI session can contain many runs; one task/job can span runs and interfaces; one
+pending item can be created through one interface and confirmed through another.
+These identities are orthogonal, not one nested session tree.
 
-### 3.2 API and State Machine
+### 2.2 Authority is domain-specific
 
-| Function | Behavior |
-|---|---|
-| `decay(db, now_ts)` | Whole-table batch: `health -= days × rate` (from last_accessed_at or created_at); skips `immune=1` |
-| `to_trash(db, now_ts)` | `alive ∧ health≤0 ∧ immune=0` → `state='trash', trashed_at=now`; **also appends the raw event into transcript** (rehydrate pointer valid from this moment) |
-| `on_hit(db, event_ids, now_ts)` | Retrieval hit: health=1.0, last_accessed_at=now; a hit inside trash revives to alive |
-| `due_for_distill(db, now_ts)` | Select `trash ∧ trashed_at ≤ now - retention` |
-| `mark_archived(db, event_ids)` | After distillation; archived rows never auto-load again |
+| Domain | Authority | Non-authoritative / derived |
+|---|---|---|
+| Schedules, todos, projects, events, pending items, run audit | DB1 SQLite | UI cache, LLM summaries |
+| Human-maintained knowledge and agent profile/SOP | Obsidian vault + manual edits | vector/FTS index |
+| Raw evidence | transcript JSONL | distilled summaries, embeddings |
+| Development workflow and code state | Beacon artifacts + git | OpenCode session summaries |
+| Retrieval acceleration | No independent authority; rebuilt from vault | `index.db` itself |
 
-State machine (§4.1): `alive ⇄ trash → archived`. Immune categories
-(schedule/identity/preferences/manually pinned) never decay.
-Archived = forgotten = not auto-loaded ≠ deleted (raw text lives in transcript forever).
+**MEM-02 — Domain-specific authority.** DB1 is not the single global SoR for every
+domain. Each datum is resolved by the authority table above. OpenCode sessions are
+observational signals only.
 
-## 4. Retrieval Index (`core/vindex.py`)
+**MEM-06 — Summaries are not persistence.** UI/model compaction, handoff text, and
+chat summaries remain observational context until explicitly promoted through an
+authoritative checkpoint or proposal path.
 
-### 4.1 Platform Behavior (probe-verified — do not "fix" by intuition)
+## 3. Implemented Storage and Lifecycle
 
-| Finding | Consequence |
-|---|---|
-| sqlite-vec **must be loaded per connection** (P1: `no such module: vec0` otherwise) | vindex owns its `_connect()`; does not share `stm.connect` |
-| vec0 **does not support INSERT OR REPLACE** (P2: UNIQUE constraint failure) | upsert = `DELETE WHERE rowid` + `INSERT` |
-| vec0 rowid **accepts INTEGER only** (P3); note ids are strings `YYYYMMDD-slug` | `note_map` mapping table required |
-| FTS5 **unicode61 never matches CJK**; trigram needs **≥3 chars**; LIKE works on trigram tables; English works fine (P4) | tokenizer = trigram; queries <3 chars degrade to LIKE |
-| embedding **binary blob (float32 LE) roundtrips fine** (P5) | store `struct.pack(f"{dim}f", *vec)`, not JSON strings |
+### 3.1 Four physical storage roles
 
-### 4.2 Schema (index.db, separate file)
+| Store | Role | Rebuildability |
+|---|---|---|
+| DB1 `state.db` | Mutable structured state and audit | Cannot be replaced by an index; back up by domain |
+| DB2 vault | Human-readable, manually correctable knowledge | Manual content may be unique; not assumed rebuildable |
+| transcript JSONL + `.idx` | Raw append-only evidence | JSONL is truth; `.idx` is rebuildable |
+| `index.db` | Derived FTS5 + sqlite-vec index | Fully rebuilt from the vault |
 
-```sql
-CREATE TABLE note_map (               -- TEXT note_id ↔ INT rowid (vec0 requirement)
-  rowid    INTEGER PRIMARY KEY AUTOINCREMENT,
-  note_id  TEXT NOT NULL UNIQUE
-);
-CREATE VIRTUAL TABLE notes_fts USING fts5(
-  note_id, title, summary, tags, tokenize='trigram'
-);
-CREATE VIRTUAL TABLE notes_vec USING vec0(
-  embedding float[1536]               -- dim = config.EMBED_DIM
-);
-CREATE TABLE meta (                   -- embed-model change ⇒ full rebuild
-  key TEXT PRIMARY KEY, value TEXT    -- embed_model / embed_dim / built_at
-);
+**MEM-03 — Raw evidence is append-only.** The transcript has no delete API. JSONL is
+flushed before `.idx`; a crash can at worst leave a short index, recoverable through
+`rebuild_idx()`.
+
+**MEM-04 — The index is not authoritative.** `index.db` must hold no unique data. A
+model/dimension change or corruption requires a complete rebuild.
+
+### 3.2 Health metabolism
+
+```text
+alive ⇄ trash → archived
 ```
 
-### 4.3 API
+- A new event starts at `health=1.0`.
+- `[IMPLEMENTED]` `HEALTH_DECAY_PER_DAY=0.05`: roughly 20 untouched days to zero.
+- `[IMPLEMENTED]` `TRASH_RETENTION_DAYS=14`: a hit during trash revives the event.
+- Schedule, identity, preference, and manually pinned categories are immune.
+- Archived means no longer auto-loaded, not deleted; raw text remains in transcript.
 
-| Function | Behavior |
-|---|---|
-| `upsert(idx_db, note_id, title, summary, tags, vector?)` | get/create rowid in note_map → DELETE+INSERT in both FTS5 and vec0; vector=None updates FTS only |
-| `search_fts(idx_db, query, limit)` | ≥3 chars (or English tokens) → MATCH; <3 chars → LIKE fallback. Returns `[(note_id, score)]` |
-| `search_vec(idx_db, vector, k)` | KNN; returns `[(note_id, distance)]` |
-| `rebuild(idx_db, vault_path, embed_fn)` | Full rebuild: scan vault frontmatter → repopulate (used on model change / corruption) |
+### 3.3 Distillation flow
 
-Invariants: index.db holds no unique data; a change of `meta.embed_model`
-forces rebuild; vectorized content = title+summary+tags (full text is served
-by FTS/rehydrate).
-
-## 5. Distillation Pipeline (`core/consolidate.py`)
-
-### 5.1 Flow (§6.3)
-
-```
-decay → to_trash (raw dump) → due_for_distill → group by day (≤50 per group)
-  → LLM distill (consolidator contract) → field-level validation (5 rules)
-  → ltm writes notes (with source_ids) → mark_archived → vindex.upsert
-  → agent_runs stats
+```text
+decay → to_trash (raw text to transcript) → due_for_distill
+→ group by day (≤50) → LLM distillation → field validation
+→ vault note (source_ids) → mark_archived → vindex.upsert
 ```
 
-### 5.2 Field-Level Validation (5 rules; skip per group, never fail the batch)
+Validation (`core/consolidate.py`) requires `kind ∈ {episodic, preference}`, controlled
+tags, `source_event_ids` drawn only from the current batch, confidence ≥0.6, a non-empty
+summary of at most 500 characters, a non-empty title, and a non-empty topic of at most
+30 characters (the part-004.5 cross-day linking field); supersedes is optional but, when
+present, must point to a real, not-yet-superseded profile note. A bad group is skipped
+while its events remain in trash for a later retry.
 
-1. `kind` ∈ {episodic, preference}
-2. `tags` ⊆ controlled vocabulary (INDEX.md)
-3. `source_event_ids` ⊆ actual ids of this batch (**LLM must not fabricate sources**)
-4. `confidence` ≥ 0.6 (below ⇒ skip, conservative)
-5. `summary` non-empty and ≤500 chars
+**MEM-05 — Compression remains rehydratable.** Every distilled note must retain
+`source_ids`. Compression cannot sever the path to raw evidence or make a failed
+distillation lose data.
 
-On failure → skip that group + log `proposal_rejected` to events + continue.
-The affected events stay in trash (retried next run) — **distillation failure
-can never lose data**.
+## 4. Implemented Retrieval and Context Assembly
 
-### 5.3 Output
+### 4.1 Retrieval (strong-hit short-circuit + RRF fusion + rehydrate)
 
-- `kind=episodic` → `vault/episodic/YYYYMMDD-<slug>.md` (frontmatter per §5.2:
-  source=consolidation, period, source_ids, distilled_at, model, tags)
-- `kind=preference` → `vault/agent/profile/` (decay-immune; source_ids provenance)
+`[IMPLEMENTED]` (part-004.5, `core/retrieve.py`):
 
-## 6. Four-Stage Cascade Retrieval (`core/retrieve.py`)
+1. Strong index short-circuit: when a query has at least 2 tokens (or all tokens for a
+   single-token query) matching one note's title/summary, return immediately at zero
+   FTS/embedding cost.
+2. Otherwise draw candidates from three stages — INDEX registry, FTS5 trigram (CJK ≥3
+   chars MATCH, shorter queries LIKE), and sqlite-vec KNN (one embedding call) — then
+   fuse the ranking with RRF (`RRF_K=60`).
+3. Rehydrate is a later on-demand step following `source_ids` for exact names, dates,
+   numbers, or dispute checks; it is not a peer ranking stage.
 
+Any hit calls `health.on_hit`, healing frequently used source events.
+
+### 4.2 Current context model
+
+`[IMPLEMENTED]` Each run reloads required DB1 state, prompt contracts, and on-demand
+retrieval results. Chain-of-thought and the complete working context are discarded at
+the end. `vault/agent/` is progressively disclosed: registry one-liners first, full
+notes only when needed.
+
+If context pressure occurs, preserve system policy, the current user instruction,
+authoritative constraints, and directly relevant evidence first. Low-scoring hits,
+duplicate tool output, and reloadable full text are evicted or replaced with references
+first. Exact token caps require measurement and remain configurable rather than invented.
+
+## 5. Multi-Layer Memory Options Under Evaluation
+
+### 5.1 Four different concepts
+
+- Storage tier: where data lives among DB1, vault, transcript, and index.
+- Retrieval stage: which search step serves one query.
+- Context continuity: how task state resumes across runs.
+- Agent-managed paging: whether an LLM moves data among STM/MTM/LPM itself.
+
+The first two are implemented; that does not imply adoption of the latter two.
+
+### 5.2 Options A/B/C/D
+
+| Option | Status | Mechanism | Benefit | Risk |
+|---|---|---|---|---|
+| A Current | `[IMPLEMENTED]` | Stateless run, rebuild from authority, retrieve on demand | Simplest, replayable, small pollution surface | Long tasks may repeat reads or lose non-authoritative intermediate decisions |
+| B Task Capsule | `[CANDIDATE]` | A + goal/constraints/decisions/completed/open-loops/next-action/evidence refs | Clear cross-run resume | Schema, versioning, staleness, and conflict management |
+| C Controlled warm set | `[CANDIDATE]` | B + task-scoped cache loaded/evicted by deterministic assembly | Fewer repeated searches within one task | Cache invalidation, synchronization, observability cost |
+| D LLM-managed paging | `[CANDIDATE]` | C + LLM chooses STM↔MTM↔LPM movement | May help very long exploratory tasks | Extra rounds, latency, tokens, non-reproducibility, pollution, recovery complexity |
+
+**MEM-08 — Minimal capsule.** If B is adopted, it stores structured checkpoints and
+evidence references only, never chain-of-thought, full chat history, or large content
+that can be reloaded from authority.
+
+**MEM-09 — Disposable warm set.** If C is adopted, the warm set is limited to one
+task, has provenance and invalidation rules, and can be reconstructed from authority
+plus L3/L4 retrieval after loss.
+
+**MEM-10 — Evidence gate for paging.** D may enter design only if, on real workloads,
+it beats C on correctness, resume quality, p95 latency, token/tool-call cost, and
+pollution rate. Architectural novelty is not evidence.
+
+> **External evidence note (backlog-032)**: DeepSeek Engram (arXiv 2601.07372)
+> U-curve experiments on a 27B model show that over-allocating resources to memory
+> degrades dynamic, context-dependent reasoning. This provides external quantitative
+> support for the restraint rules in this section (capsule minimality, discardable
+> warm set, evidence gate for paging, and the problem-triggered-escalation
+> discipline): pushing more memory into context is not free. Caveat: the paper's
+> 75-80%/20-25% split is a **model-parameter budget** allocation and does not
+> transfer numerically to an external memory system; this project borrows only the
+> qualitative conclusion that too much memory hurts reasoning.
+
+## 6. Agent Tools, Isolation, and Mutation Authority
+
+### 6.1 Calling a tool is not write authority
+
+Current capability permissions are `read`, `propose`, `auto_apply`, `apply`, and
+`job`. A subagent may call an allowlisted scoped capability directly; Metatron need
+need not relay each call. The LLM still receives no raw SQL, DB connection, arbitrary
+vault/file write, or bare `writer.apply` primitive.
+
+Recommended responsibility split:
+
+```text
+Metatron/orchestrator = control plane: routing, dispatch, cross-agent conflicts, synthesis
+Capability gateway   = policy plane: allowlist, scope, budget, timeout, audit
+Deterministic writer = data-plane commit boundary: validate / confirm / commit
 ```
-① index-first   match INDEX.md registry one-liners    zero cost, explainable
-② FTS5          trigram full-text (CJK≥3 / LIKE)      zero embedding cost
-③ vector KNN    sqlite-vec (semantic paraphrase)      one embed call
-④ rehydrate     read raw text via source_ids          exact numbers/names
-```
 
-Unified return: `[{note_id, path, score, stage}]`.
-**Hit closes the loop**: any stage hit → `health.on_hit(source events)` —
-frequently-asked memories decay slower (§4.1 metabolism).
+**MEM-11 — Orthogonal permissions.** “May call this capability” and “may mutate
+shared state” are separate decisions. Interface exposure, agent allowlist, and
+permission remain separate policy fields.
 
-## 7. Failure Modes and Recovery
+**MEM-12 — No raw write primitive.** An LLM-controlled agent never gets raw SQL, a
+DB connection, arbitrary file writing, or any path that bypasses validators.
+
+**MEM-13 — One deterministic commit boundary per path.** Agent- and user-initiated
+proposal mutations pass `writer.apply` validation; trusted internal job pipelines
+(for example consolidation via `ltm.write_note`, `ltm.mark_superseded`, and
+`vindex.upsert`) use their own deterministic validated write paths. Neither bypasses
+validation, and neither requires one orchestrator process to synchronously proxy every
+operation. An LLM agent gets no raw storage write primitive on any path.
+
+**MEM-14 — Confirmation fails closed.** Schedule/task writes, batch maintenance, and
+other risky mutations require preview→confirm. Decline or timeout means no commit.
+`auto_apply` is reserved for explicitly low-risk operations and still validates.
+
+### 6.2 When an agent gets iterative tools
+
+Grant iterative tools only when the next step genuinely depends on the previous
+result, sources cannot be known in advance, or several pieces of evidence must be
+compared. Recall qualifies. If deterministic code can collect all input first, as for
+schedule parsing, curation, or coding tracking, one pure-function call is cheaper,
+testable, and replayable.
+
+Each scope should carry `allowed_tools`, read scope, allowed proposal types,
+`max_tool_calls`, token/time budget, and expiry. Numeric limits come from measurement.
+
+## 7. Trust, Provenance, Conflict, and Correction
+
+At minimum, distinguish system policy, direct user input, internally verified state,
+external untrusted content, and LLM inference. A web page, post, or tool output is data,
+not instruction. Before long-term promotion, retain URL/time/hash/source id and pass
+curator/writer validation.
+
+**MEM-16 — Isolate untrusted content.** `external_untrusted` content cannot rewrite
+agent policy, gain tool authority, or become an authoritative fact without validation.
+Prompt injection inside it is quoted data.
+
+When old and new preferences or knowledge conflict, retain both and express correction
+through `superseded_by`, time, and provenance. Retrieval surfaces the superseding note.
+Suspected poisoning is quarantined, down-ranked, or excluded from active retrieval while
+raw evidence remains intact.
+
+## 8. Concurrency, Idempotency, Observability, and Recovery
+
+`agent_runs` records start/finish/status/summary/error, and the top-level guard prevents
+a run from staying `running` forever. Independent skills remain idempotent and resumable;
+cursors are recovery points.
+
+**MEM-15 — Concurrency protection.** Any future capsule, pending, or shared-state
+concurrent update must use version compare-and-swap, atomic claim, or an idempotency
+key. A stale patch must never silently overwrite a newer version.
 
 | Failure | Recovery |
 |---|---|
-| index.db corrupt/deleted | `vindex.rebuild` — derived artifact, zero data loss |
-| .idx inconsistent with JSONL | `transcript.rebuild_idx` |
-| LLM fails all night | events remain in trash, re-picked next run; agent_runs status=error is auditable |
-| Embedding model changed | meta mismatch → forced rebuild + golden queries (backlog-007) |
-| vault note frontmatter manually broken | ltm parse failure → skip that note + log to events; never crashes the whole vault |
+| Corrupt/deleted `index.db` | `vindex.rebuild` |
+| `.idx` behind JSONL | `transcript.rebuild_idx` |
+| Distillation LLM failure | events stay in trash for retry |
+| Broken vault frontmatter | skip and log the note; do not crash the vault |
+| Duplicate pending confirmation | `[PLANNED]` atomic claim in part-006 slice-001; not claimed solved yet |
+| UI session interruption | rebuild from DB1/Beacon/vault authority, not full-chat replay |
 
-## 8. Known Limitations
+## 9. Probe-Verified Implementation Reference
 
-- FTS5 trigram: 2-char CJK queries fall back to LIKE (no ranking); prefer ≥3-char tags
-- Decay is linear, not an Ebbinghaus curve — sufficient at personal scale, tunable via config
-- Transcript keyword search is a linear scan — 17ms per 10k lines; consider FTS
-  only if a single month exceeds ~100k lines (YAGNI)
-- sqlite-vec vec0 is brute-force KNN (no ANN index) — imperceptible below ~10k notes
+### 9.1 Transcript API
+
+- `append(db_dir, entry_id, kind, payload, ts)`: JSONL before `.idx`.
+- `read_by_ids`: seek through `.idx`; report missing ids without raising.
+- `read_by_time`: linear scan across monthly files.
+- `read_by_keyword`: linear scan; measured around 17ms for 10k lines.
+- `rebuild_idx`: rebuild the derived index from JSONL.
+
+### 9.2 sqlite-vec / FTS5 facts
+
+| Probe | Verified behavior | Design consequence |
+|---|---|---|
+| P1 | sqlite-vec extension must load for every connection | dedicated `vindex._connect()` |
+| P2 | vec0 does not support `INSERT OR REPLACE` | upsert = DELETE + INSERT |
+| P3 | vec0 rowid accepts INTEGER only | `note_map` maps text note ids |
+| P4 | `unicode61` misses CJK; trigram needs ≥3 chars | short queries use LIKE |
+| P5 | float32 little-endian blob roundtrips correctly | embeddings are not JSON strings |
+
+Known limits: two-character CJK LIKE has no ranking; transcript keyword search is
+linear; vec0 is brute-force KNN and remains acceptable below roughly ten thousand notes.
+Upgrade only after observed thresholds, not preemptively.
+
+## 10. Evaluation Plan and Decision Gates
+
+Compare A with B first. Test C only if B remains insufficient; D comes last. Workloads
+should include a feature spanning three runs, next-day resume, two parallel subagents,
+a user changing constraints, superseded preferences, raw-evidence verification, and a
+cancelled then reopened task.
+
+Measure restoration of goal/constraints/next action, repeated searches, context tokens,
+LLM/tool calls, p50/p95 latency, stale-state load rate, rejected unproven promotions,
+concurrent conflicts, and rebuildability after failure.
+
+**MEM-17 — Problems trigger complexity.** Keep A if it has no reproducible failure.
+Stop at B if B solves the problem. Test C only when repeated retrieval or context pressure
+is a dominant cost. D must beat C on the same workload.
+
+```text
+Does A fail reproducibly? ─no→ keep A
+        │yes
+        ▼
+Is B Task Capsule enough? ─yes→ adopt B
+        │no
+        ▼
+Does C deterministic warm set improve it? ─yes→ adopt C
+        │still insufficient
+        ▼
+Propose D only after LLM paging empirically beats C
+```

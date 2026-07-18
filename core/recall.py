@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import config
-from core import llm, ltm, retrieve, stm, subagents
+from core import llm, ltm, retrieve, subagents
 
 MAX_STEPS = 6
 _ANSWER_MAX = 500
@@ -26,6 +26,9 @@ class RecallResult:
     citations: list[str] = field(default_factory=list)
     steps: int = 0
     ok: bool = True          # False = 執行異常(LLM 壞/步數爆/引用驗證失敗)
+    outcome: str = "not_found"  # found(必附有效引用)/ not_found(才可空引用)
+    # 裂縫3(part-006-slice-001):found 必須 ≥1 有效 citation;LLM 回「有主張但
+    # citations=[]」一律降級 not_found——不信 LLM 自律,程式面保障『無來源不得斷言』。
 
 
 def _tool_search(args: dict, vault: Path, idx_db: Path, db: Path | None) -> str:
@@ -92,15 +95,18 @@ def ask(query: str, *, vault: Path | None = None, idx_db: Path | None = None,
                     "回答格式錯誤(citations 非陣列);原回答已丟棄。",
                     ok=False, steps=step)
             text = str(move.get("text", ""))[:_ANSWER_MAX]
-            # 引用硬規則:有主張就要有引用;引用必須真實存在
-            if citations:
-                bogus = _verify_citations(citations, vault)
-                if bogus:
-                    return RecallResult(
-                        f"引用驗證失敗(不存在的筆記 id:{bogus[:3]});原回答已丟棄。",
-                        ok=False, steps=step)
+            # 裂縫3:found 必須附有效引用。空引用 = not_found(不得斷言無來源)。
+            if not citations:
+                return RecallResult(text, citations=[], steps=step,
+                                    outcome="not_found")
+            # 引用硬規則:引用必須真實存在;含假引用 → 整答丟棄(不信 LLM 自律)
+            bogus = _verify_citations(citations, vault)
+            if bogus:
+                return RecallResult(
+                    f"引用驗證失敗(不存在的筆記 id:{bogus[:3]});原回答已丟棄。",
+                    ok=False, steps=step)
             return RecallResult(text, citations=[str(c) for c in citations],
-                                steps=step)
+                                steps=step, outcome="found")
 
         if tool == "search":
             if search_count >= 3:

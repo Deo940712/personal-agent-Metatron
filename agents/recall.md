@@ -23,6 +23,8 @@ tools: search, read_note, rehydrate   # 全唯讀白名單;無任何寫入工具
 硬規則:
 - **無來源不得斷言**:answer 的每個事實主張都要有 citations 裡的筆記支持;
   citations 不可為空,除非你是在說「找不到」。
+  (程式面保障——裂縫3:answer 若 citations=[],一律視為 `not_found`;即使你寫了
+  有主張的 text 也會被降級為「找不到」,不會輸出無來源的斷言。有主張就必須附引用。)
 - 找不到相關內容 → {"tool": "answer", "text": "知識庫中找不到關於…的內容", "citations": []}
   ——誠實說,不要編造。
 - 換不同關鍵詞最多 search 3 次;仍無結果就承認找不到。

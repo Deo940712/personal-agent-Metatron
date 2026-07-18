@@ -63,6 +63,46 @@ def test_honest_not_found(env):
     ])
     r = recall.ask("量子計算?", **kw(env), _api=api)
     assert r.ok and r.citations == [] and "找不到" in r.text
+    assert r.outcome == "not_found"                          # 空引用 = not_found
+
+
+# ── 裂縫3(part-006-slice-001):嚴格 found/not_found 契約 ──────────────
+
+def test_found_has_valid_citation(env):
+    nid = add_note(env, "RAG", "s", "b")
+    api = scripted_llm([
+        {"tool": "search", "query": "RAG"},
+        {"tool": "answer", "text": "你存過 RAG。", "citations": [nid]},
+    ])
+    r = recall.ask("RAG?", **kw(env), _api=api)
+    assert r.ok and r.outcome == "found" and r.citations == [nid]
+
+
+def test_found_claim_without_citation_downgraded(env):
+    """LLM 回有主張的 answer 但 citations=[] → 不得斷言,降級 not_found。
+
+    這是裂縫3 的核心:舊碼只在 citations 非空時驗證,LLM 可「有主張、空引用」
+    繞過『無來源不得斷言』。新契約強制 found 必附有效引用。
+    """
+    add_note(env, "真筆記", "s", "b")
+    api = scripted_llm([
+        {"tool": "search", "query": "RAG"},
+        {"tool": "answer", "text": "你一定存過某個很棒的做法。", "citations": []},
+    ])
+    r = recall.ask("我存過什麼?", **kw(env), _api=api)
+    assert r.outcome == "not_found"                          # 有主張無引用 → 降級
+    assert r.citations == []
+    assert r.ok                                              # 降級是誠實結果,非執行異常
+
+
+def test_bogus_citation_is_not_found_not_found_outcome(env):
+    """幻覺引用整答丟棄:ok=False(執行異常),outcome 不是 found。"""
+    add_note(env, "真筆記", "s", "b")
+    api = scripted_llm([
+        {"tool": "answer", "text": "編造", "citations": ["20990101-fake"]},
+    ])
+    r = recall.ask("問題", **kw(env), _api=api)
+    assert not r.ok and r.outcome != "found"
 
 
 # ── 引用硬規則(程式面保障,不信 LLM 自律)─────────────────────────────

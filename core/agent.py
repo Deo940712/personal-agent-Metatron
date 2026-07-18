@@ -260,8 +260,14 @@ def main(argv: list[str] | None = None) -> int:
         return job_track(args.db)
     if not args.text:
         parser.error("需要自然語言指令或 --job")
+    # 裂縫1:CLI 走統一入口 application.invoke,同步 confirm(給 confirm_fn)。
+    # today/todo/done/proj/recall 等能力與 Discord/MCP 共用同一分派;寫入立即落地。
+    from core.application import InvocationContext, invoke as app_invoke
     confirm = (lambda p: (print(p), True)[1]) if args.yes else _cli_confirm
-    return invoke(args.text, "cli", confirm_fn=confirm, db=args.db)
+    ctx = InvocationContext(trigger="cli", allow_recall=True, confirm_fn=confirm)
+    result = app_invoke(args.text, ctx, db=args.db)
+    print(result.text)
+    return 0 if result.outcome in ("applied", "answered", "no_result") else 1
 
 
 if __name__ == "__main__":

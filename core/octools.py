@@ -98,6 +98,47 @@ def session_todos(session_id: str, *, db_path: Path | None = None) -> dict:
             "in_progress": in_progress, "items": items}
 
 
+def session_tail(session_id: str, *, n: int = 5,
+                 db_path: Path | None = None) -> list[dict]:
+    """某 session 最後 n 則對話的 text 摘要:[{role, text, time}](時間升序)。
+
+    join message→part,只取 text part(tool call 等非 text 忽略)。role 來自
+    message.data 的 role 欄。任何 sqlite/JSON 錯誤 → 空 list(外部 schema,容錯)。
+    """
+    con = _connect_ro(db_path or OPENCODE_DB)
+    if con is None:
+        return []
+    try:
+        rows = con.execute(
+            "SELECT m.time_created, m.data, p.data "
+            "FROM message m JOIN part p ON p.message_id = m.id "
+            "WHERE m.session_id = ? "
+            "ORDER BY m.time_created, p.time_created", (session_id,)).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+
+    out: list[dict] = []
+    for m_time, m_data, p_data in rows:
+        try:
+            part = json.loads(p_data) if p_data else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if part.get("type") != "text":
+            continue
+        text = str(part.get("text", "")).strip()
+        if not text:
+            continue
+        try:
+            role = json.loads(m_data).get("role", "") if m_data else ""
+        except (json.JSONDecodeError, TypeError):
+            role = ""
+        out.append({"role": role, "text": text[:500],
+                    "time": int(m_time or 0)})
+    return out[-n:] if n > 0 else []
+
+
 def project_activity(directory: str | Path, *,
                      db_path: Path | None = None) -> dict:
     """coding_tracker 用的彙總:最近 session + 其 todo 完成率。單一入口。"""

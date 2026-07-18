@@ -13,6 +13,7 @@ import os
 
 import config
 from core import chat
+from core.application import InvocationContext, invoke
 
 # 按鈕 custom_id 前綴:'mycfg:<pending_id>:<y|n>'
 _CUSTOM_PREFIX = "mycfg"
@@ -87,10 +88,14 @@ def build_client():
             return
         if not is_authorized(message.author.id, allowed):
             return  # 非白名單靜默忽略(私人 bot,§4.1)
-        reply = chat.handle_message(str(message.content),
-                                    channel_ref=str(message.author.id))
-        view = _confirm_view(reply.pending_id) if reply.needs_buttons else None
-        await message.channel.send(reply.text, view=view)
+        # 裂縫1:走統一入口 application.invoke — Discord 也記 agent_runs,且與
+        # CLI/MCP 同一分派。allow_recall=False:知識查詢不經 Discord(§4.1 內容分級)。
+        result = invoke(
+            str(message.content),
+            InvocationContext(trigger="chat", allow_recall=False,
+                              channel_ref=str(message.author.id)))
+        view = _confirm_view(result.pending_id) if result.needs_confirmation else None
+        await message.channel.send(result.text, view=view)
 
     @client.event
     async def on_interaction(interaction):

@@ -83,6 +83,19 @@ def test_week_and_proj(db):
     assert "my-agent" in chat.handle_message("proj", db=db).text
 
 
+def test_read_routes_delegate_to_capability_tools(db, monkeypatch):
+    """slice-000:chat keeps routing/Reply conversion, not read business logic."""
+    from core.tools.contracts import CapabilityResult
+
+    monkeypatch.setattr(chat.schedule_tools, "today", lambda _ctx: CapabilityResult("today-tool"))
+    monkeypatch.setattr(chat.schedule_tools, "week", lambda _ctx: CapabilityResult("week-tool"))
+    monkeypatch.setattr(chat.project_tools, "status", lambda _ctx: CapabilityResult("project-tool"))
+
+    assert chat.handle_message("today", db=db).text == "today-tool"
+    assert chat.handle_message("week", db=db).text == "week-tool"
+    assert chat.handle_message("proj", db=db).text == "project-tool"
+
+
 def test_done_no_confirm(db):
     tid = stm.task_add(db, "買貓砂")
     r = chat.handle_message(f"done {tid}", db=db)
@@ -96,6 +109,19 @@ def test_done_bad_arg(db):
 
 def test_done_nonexistent(db):
     assert "找不到" in chat.handle_message("done 999", db=db).text
+
+
+def test_done_collision_requires_explicit_kind(db):
+    sid = stm.schedule_add(db, "週會", 1_800_000_000)
+    tid = stm.task_add(db, "買貓砂")
+    assert sid == tid
+
+    ambiguous = chat.handle_message(f"done {tid}", db=db)
+    assert "done task" in ambiguous.text and "done schedule" in ambiguous.text
+    assert stm.task_list(db) and stm.schedule_list(db)
+
+    assert "✔" in chat.handle_message(f"done schedule {sid}", db=db).text
+    assert stm.schedule_list(db) == []
 
 
 def test_todo_needs_confirm(db):

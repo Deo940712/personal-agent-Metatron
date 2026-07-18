@@ -40,7 +40,7 @@ def columns(db, table):
 
 def test_all_tables_exist(db):
     assert stm.existing_tables(db) == sorted(stm.TABLES)
-    assert len(stm.TABLES) == 7
+    assert len(stm.TABLES) == 8                           # part-006-slice-002:+directives
 
 
 @pytest.mark.parametrize("table", sorted(EXPECTED_COLUMNS))

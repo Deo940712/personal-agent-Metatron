@@ -75,9 +75,79 @@ core/mcp/tools.py       ← 工具定義(與傳輸無關;呼叫既有 chat/recal
 寫入類**復用 chat.py 的兩階段**;pending 是 DB1 共用 → MCP 發起、Discord 確認,
 跨介面天然一致。遠程 Tailscale 下 recall 全文內容分級(§4.1)解除。
 
-## Chosen Design(兩 slice)
+## 能力工具層前置(2026-07-15 定案:先模組化能力,再統一入口)
 
-### slice-1:core/mcp/tools + stdio adapter(本機,現在可做)
+使用者可見能力先收斂到 `core/tools/`，讓 CLI、Discord、未來 MCP 共用；這裡的
+tool 是**應用能力邊界**，不是把每個 Python 函式公開。`stm` CRUD、SQL helper、
+writer 內部 dispatch 都保持 private。
+
+```text
+core/tools/
+  contracts.py   typed context/result + ToolSpec
+  catalog.py     靜態 feature→tool→agent→interface→permission→storage 對照
+  schedule.py    行程讀取與 schedule proposal staging
+  tasks.py       待辦讀取、proposal staging、done
+  projects.py    專案狀態讀取
+  memory.py      recall/rehydrate 能力邊界
+```
+
+規則:
+
+1. catalog 是靜態文件/權限資料，不是動態 plugin loader。
+2. 所有 write-capable capability 仍只能產 proposal 或呼叫 `writer.apply` 的既有
+   驗證路徑；不新增第二個公開寫入口。
+3. 排程 jobs 與 `skills/` 獨立 CLI 管線列入 catalog，但不搬進 `core/tools/`；
+   它們的可獨立執行、idempotent 邊界不變。
+4. Agent allowlist 與 MCP exposure 是 catalog 的不同欄位；「存在的 capability」
+   不代表每個 agent/interface 都能呼叫。
+
+### slice-0:能力工具基座
+
+- 建立 typed contracts + 靜態 catalog。
+- 抽出目前 `chat.py` 內的 today/week/proj/todo/done/recall 能力；`chat.Reply`
+  保持相容，只做文字路由與結果轉換。
+- 建立 `docs/TOOLS.md` 作為配對矩陣權威；ARCHITECTURE/INTERFACES 只摘要並連結。
+- characterization tests 先鎖住 chat observable behavior，再搬移。
+
+## 互動硬化前置(能力工具基座之後)
+
+MCP 會成為第三個介面入口。在多一個入口前,先把 CLI/Discord 已暴露的三個
+架構裂縫補起來,否則 MCP 會複製同樣的問題(架構審查 P0):
+
+1. **統一 invocation 入口**:目前 CLI 走 `agent.invoke`、Discord 走
+   `chat.handle_message`,兩條路能力不一致(today/todo 只在 Discord;agent_runs
+   只在 CLI;pending 只在 Discord)。新增 `core/application.py::invoke(text, ctx)
+   -> InvocationResult`,三介面都只呼叫它。不引入 LLM router——沿用現有確定性
+   前綴分派,無法判定才送 schedule 子 agent。
+2. **pending 原子認領**:`chat.confirm` 目前「讀 pending → 檢查 status → apply →
+   最後標 done」有競態(雙擊/跨介面同時確認 → 落地兩次)。改成
+   `UPDATE pending_proposals SET status='applying' WHERE id=? AND status='pending'`,
+   rowcount=1 才執行,=0 表示已被處理。
+3. **recall 嚴格引用**:`recall.ask` 目前只在 citations 非空時驗證,LLM 可回
+   「有主張但 citations=[]」繞過「無來源不得斷言」。改成回答分
+   `found`(必須 ≥1 有效 citation)/ `not_found`(才可空 citations)兩態。
+
+`InvocationResult` 欄位:`text / route / outcome / pending_id / needs_confirmation
+/ run_id`。`outcome ∈ {applied, rejected, not_actionable, answered, no_result,
+needs_confirmation}`。這一步也順帶讓 Discord 有 agent_runs 記錄。
+
+**AgentSpec / model 分級**:延後(非本 part 阻塞項)。目前子 agent 契約頂部的
+`type/model/tools` 只是文件、程式沒讀;真正的工具白名單仍由程式碼硬控。等
+part-007+ 有多個新 agent 型別時再建靜態 registry(backlog-029),不預先造抽象。
+
+## Chosen Design(四 slice)
+
+### slice-1:互動硬化(MCP 前置地基)
+
+- `core/application.py`:`invoke(text, ctx: InvocationContext) -> InvocationResult`
+  ——收斂 CLI 的 `agent.invoke` 與 Discord 的 `chat.handle_message` 分派邏輯到一處;
+  `InvocationContext(trigger, allow_recall, channel_ref)`。CLI/Discord adapter 改呼叫它。
+- `pending_proposals` 加 `applying` 狀態;`stm.pending_claim(db, id) -> bool`(原子
+  UPDATE);`chat.confirm` 改用 claim。
+- `recall.ask` 回答契約分 `found`/`not_found`;found 無有效 citation → 降級 not_found。
+- pytest:三介面經同一入口行為一致;併發 claim 只成功一次;found 無引用被拒。
+
+### slice-2:core/mcp/tools + stdio adapter(本機,slice-1 之後)
 
 - DB1 新增 `directives` 表(第八表):
   `directives(id, project, text, status CHECK(pending/consumed/cancelled), created_at, consumed_at)`
@@ -89,7 +159,7 @@ core/mcp/tools.py       ← 工具定義(與傳輸無關;呼叫既有 chat/recal
 - AGENTS.md 加開場規則:「執行 `python -m core.stm directives pending`,有指令先照辦」
 - 無網路、無認證——本機自用
 
-### slice-2:HTTP/SSE adapter + Tailscale(VPS 後)
+### slice-3:HTTP/SSE adapter + Tailscale(VPS 後)
 
 - `channels/mcp_http.py`:同工具集的 HTTP/SSE 傳輸
 - 綁 **Tailscale IP**(非 0.0.0.0,非公網 IP):`MCP_BIND_HOST` 環境變數,

@@ -64,6 +64,113 @@
           ]
         }
       }
+    },
+    "part-003.1": {
+      "slices": {
+        "slice-001": {
+          "type": "documentation",
+          "commands": [
+            "python .beacon/verification/CheckMemoryDocs.py",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Review the A/B/C/D decision table and confirm that hierarchical paging is explicitly undecided rather than implemented or permanently rejected."
+          ]
+        }
+      }
+    },
+    "part-003.2": {
+      "slices": {
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_task_capsule_models.py tests/test_task_capsule_paths.py tests/test_task_capsule_fixtures.py tests/test_task_capsule_metrics.py tests/test_task_capsule_store.py tests/test_task_capsule_context.py tests/test_task_capsule_runner.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "From an empty temp experiment root, run the experiment CLI validate + run --arm both + summarize twice; confirm deterministic correctness/read/context/decision across both runs and no duplicate revisions on resume.",
+            "Point the experiment CLI at config.STATE_DB and at a modified fixture/spec; confirm both are rejected before any write.",
+            "Open docs/ECC-TASK-CAPSULE-REPORT-zh.md and confirm it separates implemented vs documented vs limitation vs absence-of-evidence and states no LLM was invoked (proxy metrics)."
+          ]
+        }
+      }
+    },
+    "part-003.5": {
+      "slices": {
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_dashboard.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run `python -m channels.dashboard`, open http://127.0.0.1:7777 in a browser, and confirm the seven panels show real data.",
+            "From the browser devtools or curl, issue POST/DELETE to any /api endpoint and confirm HTTP 405.",
+            "Confirm no new dependency was added: dashboard runs on the standard library with no fastapi/uvicorn install."
+          ]
+        }
+      }
+    },
+    "part-006": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_tools.py tests/test_chat.py tests/test_recall.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run stm init, schedule list, tasks list, and projects show from fresh CLI processes; all must exit 0 without requiring an LLM key."
+          ]
+        },
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_application.py tests/test_pending_claim.py tests/test_recall.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-000"
+          ],
+          "manualQa": [
+            "Confirm the same pending twice from two callers (or double-click) and verify only one schedule item lands and the second confirm reports the item is already handled.",
+            "Via CLI recall a query with no matching notes; verify the answer is not_found with empty citations rather than an unsourced claim."
+          ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_mcp.py tests/test_mcp_stdio.py tests/test_directives.py tests/test_scanners.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Point OpenCode at `python -m channels.mcp_stdio`; call tools/list and dev_status; confirm real session progress is read without locking opencode.db.",
+            "directive_push a next-step instruction, then in a fresh CLI run `python -m core.stm directives pending`; confirm it is read, then consume it.",
+            "schedule_add via MCP returns a pending; confirm via the confirm tool and verify it lands in DB1."
+          ]
+        },
+        "slice-003": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_mcp_http.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-002"
+          ],
+          "manualQa": [
+            "BLOCKED until VPS stage: on the VPS set MY_AGENT_MCP_BIND_HOST to the Tailscale IP, run `python -m channels.mcp_http`, and from a laptop OpenCode over Tailscale call tools/list + dev_status + schedule_add->confirm end to end.",
+            "Attempt to start with MY_AGENT_MCP_BIND_HOST=0.0.0.0 (or a public IP) and confirm the server refuses to start (fail-closed bind guard)."
+          ]
+        }
+      }
     }
   }
 }

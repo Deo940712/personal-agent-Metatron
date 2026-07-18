@@ -120,15 +120,29 @@ CREATE TABLE IF NOT EXISTS pending_proposals (
   proposal     TEXT    NOT NULL,          -- JSON 序列化的提案信封
   preview      TEXT    NOT NULL,          -- 已算好的預覽文
   status       TEXT    NOT NULL DEFAULT 'pending'
-               CHECK (status IN ('pending','done','cancelled','expired')),
+               CHECK (status IN ('pending','applying','done','cancelled','expired')),
   channel_ref  TEXT,                      -- 回覆定址 (Discord user/channel id)
   created_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_proposals(status);
+
+-- 遠端下指令佇列 (part-006-slice-002:遠端讀開發進度 + 下一步指令)
+-- 遠端 directive_push → pending → 下次 OpenCode session 開場讀取 → consume。
+CREATE TABLE IF NOT EXISTS directives (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  project      TEXT    NOT NULL,          -- 專案代號 (對應 projects.name / repo)
+  text         TEXT    NOT NULL,          -- 指令內容
+  status       TEXT    NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending','consumed','cancelled')),
+  created_at   INTEGER NOT NULL,
+  consumed_at  INTEGER                    -- consume 時間 (NULL = 未消費)
+);
+CREATE INDEX IF NOT EXISTS idx_directives_project_status
+  ON directives(project, status);
 """
 
 TABLES = ("schedule", "tasks", "projects", "cursors", "agent_runs", "events",
-          "pending_proposals")
+          "pending_proposals", "directives")
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
@@ -430,6 +444,44 @@ def pending_set_status(db: Path | None, pending_id: int, status: str) -> bool:
         con.close()
 
 
+def pending_claim(db: Path | None, pending_id: int) -> bool:
+    """原子認領:pending → applying。回傳是否由本呼叫者認領成功。
+
+    part-006-slice-001 裂縫2:取代「讀 → 檢查 status → apply」的競態。單一原子
+    UPDATE 保證雙擊/跨介面同時確認時,只有一個呼叫者拿到 rowcount==1 得以落地;
+    其餘拿 False 不執行。applying 是 confirm 落地過程中的暫態。
+    """
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE pending_proposals SET status = 'applying' "
+            "WHERE id = ? AND status = 'pending'",
+            (pending_id,))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def pending_finish(db: Path | None, pending_id: int, status: str) -> bool:
+    """認領後的終態轉移:applying → done/cancelled。回傳是否有列被更新。
+
+    part-006-slice-001 裂縫2:claim 已把 pending 轉 applying;收尾只能從 applying
+    轉出,確保未經 claim 不能直接標記,雙擊的第二次(claim 失敗)也不會誤收尾。
+    """
+    if status not in ("done", "cancelled"):
+        raise ValueError(f"pending_finish status must be done/cancelled: {status!r}")
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE pending_proposals SET status = ? WHERE id = ? AND status = 'applying'",
+            (status, pending_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
 def pending_expire_due(db: Path | None, ttl_seconds: int,
                        now_ts: int | None = None) -> list[int]:
     """把超過 TTL 的 pending 標 expired。回傳被清的 id。"""
@@ -446,6 +498,74 @@ def pending_expire_due(db: Path | None, ttl_seconds: int,
                 f"UPDATE pending_proposals SET status = 'expired' WHERE id IN ({marks})", ids)
             con.commit()
         return ids
+    finally:
+        con.close()
+
+
+# ── directives CRUD(part-006-slice-002:遠端下指令佇列)──────────────
+
+def directive_add(db: Path | None, project: str, text: str) -> int:
+    """新增一則 pending 指令。project/text 空 → ValueError(fail-closed)。"""
+    if not isinstance(project, str) or not project.strip():
+        raise ValueError("directive project must be a non-empty string")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError("directive text must be a non-empty string")
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "INSERT INTO directives (project, text, created_at) VALUES (?, ?, ?)",
+            (project.strip(), text.strip(), now()))
+        con.commit()
+        return cur.lastrowid
+    finally:
+        con.close()
+
+
+def directive_list(db: Path | None, *, project: str | None = None,
+                   status: str | None = None) -> list[dict]:
+    """列指令。project/status 為 None = 不過濾。按 created_at 排序。"""
+    con = connect(db)
+    try:
+        sql = "SELECT * FROM directives"
+        clauses, vals = [], []
+        if project is not None:
+            clauses.append("project = ?")
+            vals.append(project)
+        if status is not None:
+            clauses.append("status = ?")
+            vals.append(status)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at, id"
+        return _row_dicts(con.execute(sql, vals))
+    finally:
+        con.close()
+
+
+def directive_consume(db: Path | None, directive_id: int) -> bool:
+    """pending → consumed(記 consumed_at)。只從 pending 轉出;非 pending → False。"""
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE directives SET status = 'consumed', consumed_at = ? "
+            "WHERE id = ? AND status = 'pending'",
+            (now(), directive_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def directive_cancel(db: Path | None, directive_id: int) -> bool:
+    """pending → cancelled。只從 pending 轉出;非 pending → False。"""
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE directives SET status = 'cancelled' "
+            "WHERE id = ? AND status = 'pending'",
+            (directive_id,))
+        con.commit()
+        return cur.rowcount == 1
     finally:
         con.close()
 
@@ -508,6 +628,22 @@ def main(argv: list[str] | None = None) -> int:
     sh = p_p.add_parser("show")
     sh.add_argument("name", nargs="?", default=None)
 
+    p_d = sub.add_parser("directives", help="遠端下指令佇列").add_subparsers(
+        dest="verb", required=True)
+    da = p_d.add_parser("add")
+    da.add_argument("project")
+    da.add_argument("text")
+    dl = p_d.add_parser("list")
+    dl.add_argument("--project", default=None)
+    dl.add_argument("--status", default=None,
+                    choices=["pending", "consumed", "cancelled"])
+    dp = p_d.add_parser("pending", help="列出某專案的 pending 指令(session 開場用)")
+    dp.add_argument("--project", default=None)
+    dc = p_d.add_parser("consume")
+    dc.add_argument("id", type=int)
+    dx = p_d.add_parser("cancel")
+    dx.add_argument("id", type=int)
+
     args = parser.parse_args(argv)
     db = args.db
 
@@ -568,6 +704,27 @@ def _dispatch(args, db: Path | None) -> int:
             _print_rows(project_show(db, args.name),
                         [("name", "name"), ("phase", "phase"), ("blockers", "blockers"),
                          ("next_action", "next"), ("updated_at", "updated")])
+        return 0
+
+    if args.domain == "directives":
+        if args.verb == "add":
+            did = directive_add(db, args.project, args.text)
+            print(f"OK: directive #{did}")
+        elif args.verb in ("list", "pending"):
+            status = "pending" if args.verb == "pending" else args.status
+            _print_rows(directive_list(db, project=args.project, status=status),
+                        [("id", "#"), ("project", "project"), ("text", "text"),
+                         ("status", "status"), ("created_at", "created")])
+        elif args.verb == "consume":
+            ok = directive_consume(db, args.id)
+            print(f"OK: directive #{args.id} consumed" if ok
+                  else f"NOT PENDING: #{args.id}")
+            return 0 if ok else 1
+        elif args.verb == "cancel":
+            ok = directive_cancel(db, args.id)
+            print(f"OK: directive #{args.id} cancelled" if ok
+                  else f"NOT PENDING: #{args.id}")
+            return 0 if ok else 1
         return 0
 
     return 2

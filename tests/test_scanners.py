@@ -169,3 +169,84 @@ def test_octools_real_db_smoke():
         pytest.skip("no real opencode.db")
     sessions = octools.recent_sessions(r"C:\Users\tcart\OneDrive\Desktop\MY AGENT")
     assert isinstance(sessions, list)                        # 不 crash 即可
+
+
+# ── octools.session_tail(part-006-slice-002:讀 message/part 對話尾)────
+
+@pytest.fixture()
+def fake_ocdb_tail(tmp_path):
+    """含 message/part 的假 opencode.db(session_tail 用)。"""
+    import json
+    db = tmp_path / "opencode.db"
+    con = sqlite3.connect(db)
+    con.executescript("""
+        CREATE TABLE message (
+          id TEXT PRIMARY KEY, session_id TEXT,
+          time_created INTEGER, time_updated INTEGER, data TEXT
+        );
+        CREATE TABLE part (
+          id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+          time_created INTEGER, time_updated INTEGER, data TEXT
+        );
+    """)
+    con.executemany(
+        "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+        [
+            ("m1", "ses_1", 1000, 1000, json.dumps({"role": "user"})),
+            ("m2", "ses_1", 2000, 2000, json.dumps({"role": "assistant"})),
+            ("m3", "ses_1", 3000, 3000, json.dumps({"role": "user"})),
+            ("m4", "ses_1", 4000, 4000, json.dumps({"role": "assistant"})),
+        ])
+    con.executemany(
+        "INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("p1", "m1", "ses_1", 1000, 1000, json.dumps({"type": "text", "text": "幫我寫 parser"})),
+            ("p2", "m2", "ses_1", 2000, 2000, json.dumps({"type": "text", "text": "好,先寫 tokenizer"})),
+            ("p3", "m3", "ses_1", 3000, 3000, json.dumps({"type": "text", "text": "繼續"})),
+            ("p4", "m4", "ses_1", 4000, 4000, json.dumps({"type": "text", "text": "tokenizer 完成,接著 AST"})),
+            # 非 text part(tool call)應被忽略
+            ("p5", "m4", "ses_1", 4001, 4001, json.dumps({"type": "tool", "tool": "bash"})),
+        ])
+    con.commit()
+    con.close()
+    return db
+
+
+def test_session_tail_returns_last_n_messages(fake_ocdb_tail):
+    tail = octools.session_tail("ses_1", n=2, db_path=fake_ocdb_tail)
+    assert len(tail) == 2
+    # 最後兩則(時間序)
+    texts = [t["text"] for t in tail]
+    assert "繼續" in texts[0] or "tokenizer 完成" in texts[1]
+    assert tail[-1]["text"].startswith("tokenizer 完成")
+
+
+def test_session_tail_includes_role(fake_ocdb_tail):
+    tail = octools.session_tail("ses_1", n=4, db_path=fake_ocdb_tail)
+    roles = [t["role"] for t in tail]
+    assert "user" in roles and "assistant" in roles
+
+
+def test_session_tail_ignores_non_text_parts(fake_ocdb_tail):
+    tail = octools.session_tail("ses_1", n=10, db_path=fake_ocdb_tail)
+    # tool part 不應出現
+    assert all("bash" not in (t.get("text") or "") for t in tail)
+
+
+def test_session_tail_missing_db_returns_empty(tmp_path):
+    assert octools.session_tail("s", n=3, db_path=tmp_path / "ghost.db") == []
+
+
+def test_session_tail_wrong_schema_returns_empty(tmp_path):
+    db = tmp_path / "bad.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE message (id TEXT)")            # 缺欄
+    con.commit()
+    con.close()
+    assert octools.session_tail("s", n=3, db_path=db) == []  # 容錯,不 crash
+
+
+def test_session_tail_readonly_never_creates(tmp_path):
+    ghost = tmp_path / "nothere.db"
+    octools.session_tail("s", n=3, db_path=ghost)
+    assert not ghost.exists()

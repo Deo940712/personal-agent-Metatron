@@ -23,6 +23,12 @@ DISCORD_TOKEN_ENV = "MY_AGENT_DISCORD_TOKEN"           # Phase 2.5
 DISCORD_ALLOWED_USER_ID_ENV = "MY_AGENT_DISCORD_ALLOWED_USER_ID"  # 白名單(逗號分隔)
 LLM_API_KEY_ENV = "MY_AGENT_LLM_API_KEY"       # Phase 2
 
+# ── MCP HTTP 傳輸(part-006-slice-003;VPS 後遠端 OpenCode) ────────────
+# 綁定介面 IP。未設 = 127.0.0.1(本機)。VPS 上設為 Tailscale IP(100.64.0.0/10)。
+# 綁公網 IP → 啟動拒絕(fail-closed;Tailscale 已是 WireGuard 加密私網,不需 token/TLS)。
+MCP_BIND_HOST_ENV = "MY_AGENT_MCP_BIND_HOST"
+MCP_HTTP_PORT = 7788                            # MCP HTTP 傳輸埠(stdio 無埠)
+
 # ── LLM(OpenAI 相容 API;backlog-002 定案) ─────────────────────────
 LLM_BASE_URL_ENV = "MY_AGENT_LLM_BASE_URL"     # 未設 = OpenAI 官方
 LLM_MODEL_CHEAP = "gpt-4o-mini"                # bounded 任務:分類/抽取/格式化

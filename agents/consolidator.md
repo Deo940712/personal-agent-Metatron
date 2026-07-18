@@ -34,6 +34,13 @@ tools: none
     實際存在的 id,一個都不能虛構**;每個輸入事件至少要被一組涵蓋,
     除非它毫無資訊量
   - `confidence`: 0.0-1.0(不確定就給低分,系統會跳過低於門檻的組)
+  - `facet_key`(**只限 preference,選填**): 若這條偏好是可長期追蹤的穩定
+    facet(如回覆語言、慣用編輯器、工作時段),給一個**類內穩定鍵**
+    (snake_case,如 `reply_lang` / `editor` / `work_hours`)。系統會據此把
+    偏好累積成證據驅動的 personal model facet(重複出現才升級為穩定)。
+    一次性、情境式的偏好不要給 facet_key
+  - `facet_class`(**選填,搭配 facet_key**): 預設 `preference`;若更精確可用
+    `identity` / `routine` / `workflow` / `veto` / `tooling` / `style`
 - 沒有值得保存的內容 → 輸出 {"groups": []}
 - preference 只在事件明確顯示穩定偏好時才產出,不要過度推斷。
 
@@ -48,7 +55,9 @@ tools: none
       "tags": [string],
       "source_event_ids": [int],
       "confidence": float,
-      "supersedes": string?
+      "supersedes": string?,
+      "facet_key": string?,
+      "facet_class": string?
     }
   ]
 }

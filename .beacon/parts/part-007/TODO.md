@@ -87,7 +87,9 @@ Done gate:
 
 ### part-007-slice-002: 證據抽取 + consolidate 整合 + vault 投影
 
-Status: planned
+Status: done (2026-07-19; snapshot: `.beacon/done/part-007/part-007-slice-002-done-current.md`)
+688 tests 綠(基線 672 + 16);端到端 manual QA(偏好事件 → 夜間 job → facet →
+投影筆記 → facets list)通過。part-007 三 slice 全數完成。
 
 Goal: 確定性證據 producer + consolidate 夜間掛鉤（preference 蒸餾 → facet 提案）+
 routine 抽取 + vault/agent/profile 投影 + recall 可見。
@@ -97,16 +99,17 @@ vault/agent/profile 筆記（source: agent_knowledge + source_ids）；recall �
 「我的偏好」查得到；投影是衍生物可重建。
 
 Candidate scope:
-- [ ] `core/facets.py`：routine 抽取器（schedule/tasks 完成時間 → routine 證據；
-      純函數 + 確定性掃描）
-- [ ] `core/consolidate.py`：preference 蒸餾組同時產 `profile_facet` 提案
-      （evidence_ids = 該組 source_ids；走 writer；LLM 分類欄位級驗證沿用五條）
-- [ ] `core/facets.py`：`project_to_vault(db)` 投影 active facets → agent/profile
-      筆記（ltm.write_note；confidence 低於閾值不投影；可整批重投影）
-- [ ] recall 可見性：投影筆記進 INDEX registry（現有機制自動涵蓋，測試證明）
-- [ ] tests：routine 抽取確定性重放、consolidate 掛鉤（LLM mock）、投影 roundtrip
-      （facets → 筆記 → 刪筆記 → 重投影一致）、recall 查偏好命中投影筆記
-- [ ] Manual QA：真實使用數天後 `facets list` 合理；Obsidian 看 agent/profile
+- [x] `core/facets.py`：routine 抽取器(schedule/tasks 完成時間 → 五時段桶 →
+      routine 證據;純函數 + 確定性掃描)
+- [x] `core/consolidate.py`：preference 蒸餾組帶 facet_key → `_emit_facet` 產
+      `profile_facet` 提案(evidence_ids = source_ids;走 writer 全驗證)
+- [x] `core/facets.py`：`project_to_vault(db, vault)` 投影 active facets →
+      agent/profile 筆記(source: agent_knowledge + source_ids;低信心不投影;
+      值變更重投影自動 supersede;可整批重建)
+- [x] recall 可見性：投影筆記進 INDEX registry(測試證明)
+- [x] tests：routine 抽取重放、consolidate 掛鉤(LLM mock)、投影 roundtrip、
+      recall registry 可見(16 tests)
+- [x] Manual QA：端到端實跑(事件 → job → facet → 投影筆記 → facets list)通過
 
 Files-scope: core/facets.py, core/consolidate.py, core/ltm.py, agents/consolidator.md,
 tests/test_facets_pipeline.py

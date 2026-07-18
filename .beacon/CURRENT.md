@@ -1,57 +1,30 @@
 ﻿# CURRENT
 
-Status: active
-Part: part-007（Personal Model）
-Slice: part-007-slice-002 — 證據抽取 + consolidate 整合 + vault 投影
+Status: planning-only
+Part: (none active)
+Slice: (none promoted)
 
 ## Context
 
-part-007-slice-000/001 已完成歸檔(`.beacon/done/part-007/`):
-- slice-000:profile_facets 第九表 + stm CRUD/CLI + stability detector(656 tests)
-- slice-001:profile_facet 提案 + writer 落地 + supersede(672 tests)
+part-007（Personal Model）全三 slice 完成並歸檔至 `.beacon/done/part-007/`：
+- slice-000：profile_facets 第九表 + stm CRUD/CLI + stability detector（656 tests）
+- slice-001：profile_facet 提案 + writer 落地 + supersede（672 tests）
+- slice-002：routine 抽取 + consolidate 掛鉤 + vault 投影 + recall 可見（688 tests）
 
-## Goal
+整條鏈路已打通：偏好事件 → 夜間蒸餾 → 證據驅動 facet（重複才升級）→
+投影成 vault/agent/profile 可讀筆記 → recall 查得到；pin/forget 使用者硬覆蓋；
+矛盾走 supersede 雙側保留。全程走 writer 驗證、evidence 溯源冷儲存。
 
-確定性證據 producer + consolidate 夜間掛鉤(preference 蒸餾 → facet 提案)+
-routine 抽取 + vault/agent/profile 投影 + recall 可見。
+## Next candidate (NOT promoted — awaits user gate)
 
-Design authority: `.beacon/parts/part-007/DESIGN.md`
-Slice map: `.beacon/parts/part-007/TODO.md`
+- part-009（Proactive Advisor：world-diff quiet-tick 可過期建議）
+  ——現在 Personal Model 有 profile 品質,Advisor 可用 facets 校準建議
+- part-008（Knowledge Scout：opt-in 網路研究 + external_untrusted 隔離）
+- part-010（crowd-scenario 情境演練）
+- 或補 part-007 的真實 producer 接線（把 schedule/tasks 完成事件接進 routine 抽取器）
+（各 part 設計見 `.beacon/PLAN.md` PARTs 表）
 
-## Allowed scope
+## Blocked（等使用者環境）
 
-- [ ] `core/facets.py`：routine 抽取器(schedule/tasks 完成時間 → routine 證據;
-      純函數 + 確定性掃描)
-- [ ] `core/consolidate.py`：preference 蒸餾組同時產 `profile_facet` 提案
-      (evidence_ids = 該組 source_ids;走 writer;LLM 分類欄位級驗證沿用五條)
-- [ ] `core/facets.py`：`project_to_vault(db)` 投影 active facets → agent/profile
-      筆記(ltm.write_note;confidence 低於閾值不投影;可整批重投影)
-- [ ] recall 可見性：投影筆記進 INDEX registry(現有機制自動涵蓋,測試證明)
-- [ ] tests：routine 抽取確定性重放、consolidate 掛鉤(LLM mock)、投影 roundtrip
-      (facets → 筆記 → 刪筆記 → 重投影一致)、recall 查偏好命中投影筆記
-- [ ] Manual QA：真實使用數天後 `facets list` 合理;Obsidian 看 agent/profile
-
-Files-scope: core/facets.py, core/consolidate.py, core/ltm.py,
-agents/consolidator.md, tests/test_facets_pipeline.py,
-.beacon/parts/part-007/**, .beacon/CURRENT.md
-
-## Forbidden scope
-
-- 自動改行程/待辦(facets 只產知識)
-- part-009 建議回饋來源(Advisor 未建;表留欄位不接線)
-- per-class 配額調參(初值保守常數即可,真數據再調)
-
-## Verification target
-
-- Unit: `python -m pytest tests/test_facets_pipeline.py -q`
-- Regression: `python -m pytest tests/ -q`(基線 672 綠)
-- Manual QA: 夜間 job 實跑 + Obsidian 目視投影筆記
-
-## Done gate
-
-抽取/掛鉤/投影/recall 測試綠;DESIGN Verification Targets 五條全數對應;全綠。
-
-## Blocked(不影響本 slice)
-
-- part-006-slice-003 VPS + Tailscale 真機 QA(backlog-008)
-- 四批真 QA:LLM key / Discord token / threads session / MCP 本機連線
+- part-006-slice-003 VPS + Tailscale 真機端到端 QA（backlog-008）
+- 四批真 QA：LLM key / Discord token / threads session / MCP 本機連線

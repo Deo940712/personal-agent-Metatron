@@ -141,6 +141,20 @@
             "Hand-build a profile_facet create proposal dict with a real transcript entry id, run writer.apply, and confirm `facets list` shows the provisional facet.",
             "Repeat with a fabricated evidence id (e.g. evt:404) and confirm the proposal is rejected and an events row with action=proposal_rejected exists."
           ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_facets_pipeline.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Seed one preference event, push it past retention, run consolidate.run with a mock LLM emitting a preference group with facet_key='reply_lang', and confirm `facets list` shows a provisional reply_lang facet plus a projected note under vault/agent/profile with source=agent_knowledge and source_ids.",
+            "Re-run projection after deleting the projected note and confirm it is regenerated identically from facets (facets are the source of truth)."
+          ]
         }
       }
     },

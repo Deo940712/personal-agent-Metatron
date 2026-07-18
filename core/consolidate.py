@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 import config
-from core import health, llm, ltm, stm, subagents, vindex
+from core import health, llm, ltm, proposals as P, stm, subagents, vindex, writer
 
 MAX_EVENTS_PER_GROUP = 50
 TOPIC_LINK_WINDOW_DAYS = 30    # Membox 輕量版:同 topic 跨天串連的時間窗
@@ -121,6 +121,7 @@ def _existing_profile_index(vault: Path) -> tuple[str, set[str]]:
 
 
 def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
+                   transcript_dir: Path | None = None,
                    _api=None) -> tuple[int, list[int]]:
     """一組(一天)events → LLM → 驗證 → 寫筆記。回傳 (寫入筆記數, 已涵蓋 event ids)。"""
     day = datetime.fromtimestamp(batch[0]["ts"]).strftime("%Y-%m-%d")
@@ -191,9 +192,47 @@ def _distill_batch(batch: list[dict], vault: Path, db: Path | None,
         if group["kind"] == "episodic":
             new_path = f"episodic/{note_id}.md"
             _link_same_topic(vault, note_id, new_path, group["topic"], day, db)
+        # part-007:preference 組帶 facet_key → 同時產 profile_facet(證據驅動人格)
+        if group["kind"] == "preference" and group.get("facet_key"):
+            _emit_facet(group, source_ids, db, transcript_dir)
         written += 1
         covered.extend(group["source_event_ids"])
     return written, covered
+
+
+def _emit_facet(group: dict, source_ids: list[str], db: Path | None,
+                transcript_dir: Path | None = None) -> None:
+    """part-007-slice-002:把 preference 蒸餾組轉成 profile_facet 提案走 writer。
+
+    確定性映射(不再問 LLM):同 class+key 已有 active → reinforce;否則 create。
+    facet_class 由 facet_class 欄位給,缺省 'preference'。走 writer 欄位級驗證:
+    evidence_ids(=source_ids)必須存在於 transcript,失敗記 events 不擋蒸餾。
+    """
+    facet_key = str(group["facet_key"]).strip()
+    facet_class = group.get("facet_class", "preference")
+    if facet_class not in P.FACET_CLASSES:
+        facet_class = "preference"
+    existing = stm.facet_get_active(db, facet_class, facet_key)
+    action = "reinforce" if existing else "create"
+    proposal = {
+        "agent": "consolidator",
+        "proposal_type": "profile_facet",
+        "target": f"facet:{facet_class}/{facet_key}",
+        "payload": {
+            "action": action,
+            "facet_class": facet_class,
+            "facet_key": facet_key,
+            "value": group["summary"][:500],
+            "evidence_ids": source_ids,
+        },
+        "confidence": float(group["confidence"]),
+        "evidence": [group["summary"][:200]],
+    }
+    # create/reinforce 免確認(§3.2);走 writer 全驗證路徑
+    res = writer.apply(proposal, None, db, transcript_dir)
+    if not res.ok:
+        stm.event_append(db, "consolidator", "proposal_rejected",
+                         f"facet {action} {facet_class}/{facet_key} rejected: {res.detail}")
 
 
 def _add_related(vault: Path, path: str, related_id: str) -> bool:
@@ -265,11 +304,18 @@ def run(db: Path | None = None, vault: Path | None = None,
              "notes_written": 0, "archived": 0, "batches_failed": 0}
     for batch in _group_by_day(due):
         try:
-            written, covered = _distill_batch(batch, vault, db, _api=_api)
+            written, covered = _distill_batch(batch, vault, db,
+                                              transcript_dir=transcript_dir, _api=_api)
         except llm.LLMError:
             stats["batches_failed"] += 1
             continue  # 該天留 trash,下輪重試——永不丟資料
         stats["notes_written"] += written
         if covered:
             stats["archived"] += health.mark_archived(db, covered)
+
+    # part-007:facets 落地後,把 active facets 投影成 vault/agent/profile 可讀筆記
+    # (facets 是真相,投影是可重建衍生物;低 confidence 由 project_to_vault 過濾)
+    from core import facets as _facets
+    projection = _facets.project_to_vault(db, vault)
+    stats["facets_projected"] = projection["projected"]
     return stats

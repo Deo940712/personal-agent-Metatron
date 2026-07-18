@@ -381,20 +381,22 @@ def confirm_and_apply(proposal_dict: dict, db: Path | None = None) -> Result:
     return apply_validated(pre.proposal, db)
 
 
-def apply_validated(p: P.Proposal, db: Path | None = None) -> Result:
+def apply_validated(p: P.Proposal, db: Path | None = None,
+                    transcript_dir: Path | None = None) -> Result:
     """落地一個剛通過 precheck 的 Proposal(同步 CLI 用:precheck 與落地間無空窗)。"""
     if p.proposal_type == "profile_facet":
-        return apply_facet(p, db)
+        return apply_facet(p, db, transcript_dir)
     return _apply_change(db, p)
 
 
 # ── 主入口(CLI:同步 confirm)──────────────────────────────────────
 
 def apply(raw: dict | P.Proposal, confirm_fn: Callable[[str], bool] | None,
-          db: Path | None = None) -> Result:
+          db: Path | None = None, transcript_dir: Path | None = None) -> Result:
     """七條驗證 + 閘門 → 落地。行為對 CLI 不變(precheck 重構後相容)。
 
     confirm_fn=None = 非互動環境:需確認的提案一律拒絕(fail-closed)。
+    transcript_dir:profile_facet 的 evidence 驗證用(其餘類型忽略)。
     """
     pre = precheck(raw, db)
     if not pre.ok:
@@ -409,4 +411,4 @@ def apply(raw: dict | P.Proposal, confirm_fn: Callable[[str], bool] | None,
             return _reject(db, f"{pre.proposal.proposal_type}({pre.proposal.payload.get('action')})",
                            "user declined", status="needs_confirm_rejected")
 
-    return apply_validated(pre.proposal, db)
+    return apply_validated(pre.proposal, db, transcript_dir)

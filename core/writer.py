@@ -16,6 +16,7 @@ from typing import Callable
 
 from core import proposals as P
 from core import stm
+from core import transcript
 
 
 @dataclass
@@ -235,6 +236,40 @@ def apply_facet(p: P.Proposal, db: Path | None = None,
     return Result("applied", f"facet #{old_id} superseded by #{row_id}", row_id)
 
 
+def _item_title(db: Path | None, table: str, row_id: int) -> str:
+    """讀 schedule/tasks 標題(完成事件摘要用)。找不到 → 空字串(防禦)。"""
+    con = stm.connect(db)
+    try:
+        row = con.execute(f"SELECT title FROM {table} WHERE id = ?", (row_id,)).fetchone()
+        return row[0] if row else ""
+    finally:
+        con.close()
+
+
+def _record_completed(db: Path | None, table: str, row_id: int, title: str) -> int:
+    """完成一件 schedule/task → events(action='completed')+ 冷儲存 entry。
+
+    part-011:作息迴圈訊號源。先寫事件取得 id,再以 evt:<id> append transcript,
+    最後把 source_ids 補回事件列(durable 回水指標;事件被代謝/蒸餾後原文仍在)。
+    """
+    summary = f"完成 {table} #{row_id}:{title}".strip()
+    event_id = stm.event_append(db, "user", "completed", summary,
+                                target=f"{table}:{row_id}")
+    entry_id = f"evt:{event_id}"
+    transcript.append(None, entry_id, "event_raw",
+                      {"summary": summary, "target": f"{table}:{row_id}",
+                       "title": title}, stm.now())
+    # source_ids 補回(event_append 無此參數的更新路徑,直接 UPDATE)
+    con = stm.connect(db)
+    try:
+        con.execute("UPDATE events SET source_ids = ? WHERE id = ?",
+                    (json.dumps([entry_id]), event_id))
+        con.commit()
+    finally:
+        con.close()
+    return event_id
+
+
 def _apply_change(db: Path | None, p: P.Proposal) -> Result:
     table = _TABLE[p.proposal_type]
     action = p.payload["action"]
@@ -263,12 +298,17 @@ def _apply_change(db: Path | None, p: P.Proposal) -> Result:
         # task_change 的 cancel 沒有對應 status(tasks 無 cancelled)→ archived
         if table == "tasks" and action == "cancel":
             status = "archived"
+        title = _item_title(db, table, row_id)     # 取完成事件摘要用(狀態改前先讀)
         ok = (stm.schedule_set_status(db, row_id, status) if table == "schedule"
               else stm.task_set_status(db, row_id, status))
         if not ok:
             return _reject(db, f"{p.proposal_type}#{row_id}", "target row not found")
         stm.event_append(db, "writer", "state_change",
                          f"{table} #{row_id} → {status} by {p.agent}", target=f"{table}:{row_id}")
+        # part-011:完成(非取消)寫 completed 事件 + 冷儲存 — 作息迴圈的訊號源。
+        # source_ids 指向 transcript(durable,即使事件之後被代謝/蒸餾仍可回水)。
+        if action == "done":
+            _record_completed(db, table, row_id, title)
         return Result("applied", f"{table} #{row_id} → {status}", row_id)
 
     # update:只改給定欄位

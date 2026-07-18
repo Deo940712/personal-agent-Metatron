@@ -1,33 +1,43 @@
 ﻿# CURRENT
 
-Status: planning-only
-Part: (none active)
-Slice: (none promoted)
+Status: active
+Part: part-011（收尾接線 + 文件 + 回歸測試）
+Slice: part-011-slice-000 — 作息迴圈接線（completed → routine facet → advisor）
 
 ## Context
 
-part-010（crowd-scenario 情境演練）全三 slice 完成並歸檔至 `.beacon/done/part-010/`：
-- slice-000：scenarios 專區 + bucket firewall + non_authoritative 儲存（789 tests）
-- slice-001：vendored crowd-scenario（pin 1b40712a）+ subprocess adapter +
-  recall 模擬標記（796 tests，含真 subprocess 冒煙）
-- slice-002：三個人 templates + `python -m core.scenario rehearse` CLI（807 tests）
+所有規劃 part（001-010）完成。part-011 補既有 part 之間留待後續的接線 + 文件漂移
++ 測試缺口。計畫權威：`.omo/plans/next-phase-wiring-qa.md`（8 todo，已 gap 分析）。
+注意：本 part-011 是收尾接線，與 PLAN backlog 的 MiroFish part-011 不同。
 
-**全部規劃 part 完成**：自適應助理層四塊到齊（007 Personal Model / 009 Advisor /
-008 Scout / 010 Scenario Rehearsal）。807 tests 綠。
+## Goal
 
-## 系統自動運行（使用者離開期間）
+補完 routine 迴圈根因（todo 1-4）：完成事件 → extract_routine → routine facet →
+advisor 偏離偵測 → 建議。死程式碼 extract_routine 從此有 caller。
 
-排程 jobs 已註冊 Windows Task Scheduler（見 tools/schedule_jobs.ps1）：
-remind 每 15 分；scout/advise/consolidate/curate/track 每日。
-無 LLM key 的 job 會記 error 於 agent_runs（fail-closed，不影響其他 job）。
+Design authority: `.beacon/parts/part-011/DESIGN.md`
+Slice map: `.beacon/parts/part-011/TODO.md`
 
-## Next candidate (NOT promoted — awaits user gate)
+## Allowed scope
 
-- 跨 part 接線：routine producer / advisor 降頻讀 facet / world-diff 接 scout
-- 文件同步（part-010 反映進 ARCHITECTURE/README）
-- backlog triage（librarian backlog-017 等）
+- [x] todo 1：writer done → completed 事件 + transcript source_id（5 tests 綠）
+- [ ] todo 2：consolidate 尾端 window-read completed → extract_routine → routine facet
+- [ ] todo 3：advisor routine-deviation 讀真 completed 事件端到端測
+- [ ] todo 4：routine loop 整合測
 
-## Blocked（等使用者環境）
+Files-scope: core/writer.py, core/consolidate.py, tests/test_completed_event.py,
+tests/test_facets_pipeline.py, tests/test_advisor.py, tests/test_routine_loop.py,
+.beacon/parts/part-011/**, .beacon/CURRENT.md
 
-- 四批真 QA：LLM key / Discord token / threads session / MCP 本機連線
-- VPS + Tailscale 真機 QA（backlog-008）
+## Forbidden scope
+
+- 新 part/表/job；繞過 writer；gate-locked backlog；Task Capsule B 重測；真環境 QA
+
+## Verification target
+
+- Unit: `python -m pytest tests/test_completed_event.py tests/test_facets_pipeline.py tests/test_routine_loop.py -q`
+- Regression: `python -m pytest tests/ -q`（基線 807）
+
+## Done gate
+
+extract_routine 有 caller；端到端 routine loop 測綠；全綠。

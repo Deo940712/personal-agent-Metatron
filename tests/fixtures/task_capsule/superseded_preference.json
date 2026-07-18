@@ -1,0 +1,39 @@
+{
+  "name": "superseded_preference",
+  "task_id": "tc-superseded-005",
+  "session_ids": ["ses-E1"],
+  "run_ids": ["run-40", "run-41"],
+  "authority_sources": [
+    {"key": "db1:tasks:905", "version": "v2", "payload": {"title": "format notifications", "status": "in_progress"}},
+    {"key": "vault:agent/profile", "version": "v3", "payload": {"reply_language": "Traditional Chinese", "superseded": "reply_language was English in v2"}}
+  ],
+  "observations": [
+    {"source_kind": "vault", "source_id": "agent/profile-v2", "captured_at": 1800003000, "authority_class": "observational", "version_or_hash": "sha:obsE1", "payload": {"reply_language": "English", "note": "old preference"}}
+  ],
+  "oracle": {
+    "next_action": "format notifications in Traditional Chinese",
+    "status": "in_progress",
+    "claims": ["preference is Traditional Chinese", "English preference superseded"],
+    "evidence_refs": [["vault:agent/profile", "v3"]]
+  },
+  "expected_reads": ["db1:tasks:905", "vault:agent/profile"],
+  "forbidden_claims": ["format in English", "reply language is English"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-superseded-005",
+    "version": 2,
+    "status": "in_progress",
+    "goal": "format notifications",
+    "constraints": ["match user preference"],
+    "decisions": ["use English templates"],
+    "completed": [],
+    "failed_attempts": [],
+    "open_loops": ["apply preference"],
+    "next_action": "apply English templates",
+    "evidence_refs": [["vault:agent/profile", "v2"]],
+    "authority_versions": [["vault:agent/profile", "v2"]],
+    "created_at": 1800003000,
+    "updated_at": 1800003050
+  },
+  "changed_authority": {"key": "vault:agent/profile", "version": "v3", "payload": {"reply_language": "Traditional Chinese"}}
+}

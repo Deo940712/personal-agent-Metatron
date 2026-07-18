@@ -1,0 +1,40 @@
+{
+  "name": "three_run_continuation",
+  "task_id": "tc-continuation-001",
+  "session_ids": ["ses-A1", "ses-A2", "ses-A3"],
+  "run_ids": ["run-1", "run-2", "run-3"],
+  "authority_sources": [
+    {"key": "db1:tasks:501", "version": "v3", "payload": {"title": "build parser", "status": "in_progress"}},
+    {"key": "beacon:CURRENT", "version": "v3", "payload": {"slice": "parser-slice-001", "next": "add tokenizer tests"}},
+    {"key": "git:HEAD", "version": "c3", "payload": {"last_commit": "wip: parser skeleton", "unpushed": 2}}
+  ],
+  "observations": [
+    {"source_kind": "opencode", "source_id": "ses-A2", "captured_at": 1800000100, "authority_class": "observational", "version_or_hash": "sha:obs2", "payload": {"summary": "wrote parser skeleton"}}
+  ],
+  "oracle": {
+    "next_action": "add tokenizer tests",
+    "status": "in_progress",
+    "claims": ["parser skeleton exists", "2 commits unpushed"],
+    "evidence_refs": [["beacon:CURRENT", "v3"], ["git:HEAD", "c3"]]
+  },
+  "expected_reads": ["db1:tasks:501", "beacon:CURRENT", "git:HEAD"],
+  "forbidden_claims": ["parser is complete", "tokenizer tests already pass"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-continuation-001",
+    "version": 2,
+    "status": "in_progress",
+    "goal": "build parser",
+    "constraints": ["no external deps"],
+    "decisions": ["hand-written recursive descent"],
+    "completed": ["parser skeleton"],
+    "failed_attempts": [],
+    "open_loops": ["tokenizer tests"],
+    "next_action": "continue parser work",
+    "evidence_refs": [["beacon:CURRENT", "v2"]],
+    "authority_versions": [["beacon:CURRENT", "v2"], ["git:HEAD", "c2"]],
+    "created_at": 1800000000,
+    "updated_at": 1800000100
+  },
+  "changed_authority": null
+}

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 1,
+  "note": "Synthetic/de-identified replay workloads for the Task Capsule A/B experiment (part-003.2). No private transcript or session dump. Authoritative sources are shared by both arms; prior_capsule is B-only and must not leak the oracle answer.",
+  "workloads": [
+    "three_run_continuation",
+    "next_day_resume",
+    "parallel_agent_handoff",
+    "changed_constraint",
+    "superseded_preference",
+    "evidence_rehydrate",
+    "cancel_restart"
+  ]
+}

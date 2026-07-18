@@ -1,0 +1,39 @@
+{
+  "name": "cancel_restart",
+  "task_id": "tc-cancel-007",
+  "session_ids": ["ses-G1", "ses-G2"],
+  "run_ids": ["run-60", "run-61"],
+  "authority_sources": [
+    {"key": "db1:tasks:1107", "version": "v3", "payload": {"title": "deploy pipeline", "status": "cancelled"}},
+    {"key": "beacon:CURRENT", "version": "v11", "payload": {"slice": "deploy-slice-001", "next": "restart from clean checkout", "note": "previous attempt cancelled"}}
+  ],
+  "observations": [
+    {"source_kind": "opencode", "source_id": "ses-G1", "captured_at": 1800005000, "authority_class": "observational", "version_or_hash": "sha:obsG1", "payload": {"summary": "deploy attempt aborted mid-way"}}
+  ],
+  "oracle": {
+    "next_action": "restart from clean checkout",
+    "status": "cancelled",
+    "claims": ["previous deploy attempt cancelled"],
+    "evidence_refs": [["db1:tasks:1107", "v3"], ["beacon:CURRENT", "v11"]]
+  },
+  "expected_reads": ["db1:tasks:1107", "beacon:CURRENT"],
+  "forbidden_claims": ["deploy completed successfully", "pipeline is running"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-cancel-007",
+    "version": 2,
+    "status": "in_progress",
+    "goal": "deploy pipeline",
+    "constraints": ["clean checkout before deploy"],
+    "decisions": ["blue-green deploy"],
+    "completed": [],
+    "failed_attempts": ["deploy aborted mid-way"],
+    "open_loops": ["restart deploy"],
+    "next_action": "continue the deploy",
+    "evidence_refs": [["db1:tasks:1107", "v2"]],
+    "authority_versions": [["db1:tasks:1107", "v2"], ["beacon:CURRENT", "v10"]],
+    "created_at": 1800005000,
+    "updated_at": 1800005100
+  },
+  "changed_authority": null
+}

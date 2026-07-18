@@ -1,0 +1,40 @@
+{
+  "name": "evidence_rehydrate",
+  "task_id": "tc-rehydrate-006",
+  "session_ids": ["ses-F1"],
+  "run_ids": ["run-50", "run-51"],
+  "authority_sources": [
+    {"key": "db1:tasks:1006", "version": "v1", "payload": {"title": "confirm benchmark number", "status": "in_progress"}},
+    {"key": "vault:semantic/rag-tip", "version": "v1", "payload": {"summary": "chunk 512 to 128 recall +30%", "source_ids": ["evt:771"]}},
+    {"key": "transcript:evt:771", "version": "h1", "payload": {"raw": "benchmark: chunk 512->128, recall improved from 0.61 to 0.79 (+30%)"}}
+  ],
+  "observations": [
+    {"source_kind": "opencode", "source_id": "ses-F1", "captured_at": 1800004000, "authority_class": "observational", "version_or_hash": "sha:obsF1", "payload": {"summary": "user asked for exact recall figure"}}
+  ],
+  "oracle": {
+    "next_action": "report recall improved from 0.61 to 0.79",
+    "status": "in_progress",
+    "claims": ["recall improved 0.61 to 0.79"],
+    "evidence_refs": [["vault:semantic/rag-tip", "v1"], ["transcript:evt:771", "h1"]]
+  },
+  "expected_reads": ["db1:tasks:1006", "vault:semantic/rag-tip", "transcript:evt:771"],
+  "forbidden_claims": ["recall improved to 0.90", "no benchmark data exists"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-rehydrate-006",
+    "version": 1,
+    "status": "in_progress",
+    "goal": "confirm benchmark number",
+    "constraints": ["cite exact figure from source"],
+    "decisions": ["rehydrate from transcript for exact numbers"],
+    "completed": [],
+    "failed_attempts": [],
+    "open_loops": ["fetch exact recall figure"],
+    "next_action": "rehydrate the benchmark evidence",
+    "evidence_refs": [["vault:semantic/rag-tip", "v1"]],
+    "authority_versions": [["vault:semantic/rag-tip", "v1"], ["transcript:evt:771", "h1"]],
+    "created_at": 1800004000,
+    "updated_at": 1800004050
+  },
+  "changed_authority": null
+}

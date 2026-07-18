@@ -1,0 +1,41 @@
+{
+  "name": "parallel_agent_handoff",
+  "task_id": "tc-handoff-003",
+  "session_ids": ["ses-C1", "ses-C2"],
+  "run_ids": ["run-20", "run-21"],
+  "authority_sources": [
+    {"key": "db1:tasks:703", "version": "v4", "payload": {"title": "index rebuild", "status": "in_progress"}},
+    {"key": "beacon:CURRENT", "version": "v7", "payload": {"slice": "index-slice-001", "next": "verify rebuilt index counts"}},
+    {"key": "db1:cursors:index", "version": "v4", "payload": {"cursor": "batch-4-of-6"}}
+  ],
+  "observations": [
+    {"source_kind": "opencode", "source_id": "ses-C1", "captured_at": 1800001000, "authority_class": "observational", "version_or_hash": "sha:obsC1", "payload": {"agent": "scanner", "summary": "scanned batches 1-4"}},
+    {"source_kind": "opencode", "source_id": "ses-C2", "captured_at": 1800001100, "authority_class": "observational", "version_or_hash": "sha:obsC2", "payload": {"agent": "builder", "summary": "awaiting scanner cursor"}}
+  ],
+  "oracle": {
+    "next_action": "verify rebuilt index counts",
+    "status": "in_progress",
+    "claims": ["cursor at batch-4-of-6"],
+    "evidence_refs": [["db1:cursors:index", "v4"], ["beacon:CURRENT", "v7"]]
+  },
+  "expected_reads": ["db1:tasks:703", "beacon:CURRENT", "db1:cursors:index"],
+  "forbidden_claims": ["all batches scanned", "index rebuild finished"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-handoff-003",
+    "version": 4,
+    "status": "in_progress",
+    "goal": "index rebuild",
+    "constraints": ["idempotent batches"],
+    "decisions": ["cursor-driven resume"],
+    "completed": ["batches 1-4 scanned"],
+    "failed_attempts": [],
+    "open_loops": ["verify counts"],
+    "next_action": "coordinate scanner and builder",
+    "evidence_refs": [["db1:cursors:index", "v4"]],
+    "authority_versions": [["db1:cursors:index", "v4"], ["beacon:CURRENT", "v7"]],
+    "created_at": 1800001000,
+    "updated_at": 1800001100
+  },
+  "changed_authority": null
+}

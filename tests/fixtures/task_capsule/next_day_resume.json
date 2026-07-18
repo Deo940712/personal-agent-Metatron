@@ -1,0 +1,40 @@
+{
+  "name": "next_day_resume",
+  "task_id": "tc-resume-002",
+  "session_ids": ["ses-B1", "ses-B2"],
+  "run_ids": ["run-10", "run-11"],
+  "authority_sources": [
+    {"key": "db1:tasks:602", "version": "v2", "payload": {"title": "migrate config", "status": "in_progress"}},
+    {"key": "beacon:CURRENT", "version": "v5", "payload": {"slice": "config-slice-002", "next": "run migration dry-run"}},
+    {"key": "git:HEAD", "version": "c8", "payload": {"last_commit": "config: add schema", "unpushed": 0}}
+  ],
+  "observations": [
+    {"source_kind": "opencode", "source_id": "ses-B1", "captured_at": 1799900000, "authority_class": "observational", "version_or_hash": "sha:obsB1", "payload": {"summary": "designed config schema yesterday"}}
+  ],
+  "oracle": {
+    "next_action": "run migration dry-run",
+    "status": "in_progress",
+    "claims": ["config schema committed", "nothing unpushed"],
+    "evidence_refs": [["beacon:CURRENT", "v5"], ["git:HEAD", "c8"]]
+  },
+  "expected_reads": ["db1:tasks:602", "beacon:CURRENT", "git:HEAD"],
+  "forbidden_claims": ["migration already applied", "2 commits unpushed"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-resume-002",
+    "version": 3,
+    "status": "in_progress",
+    "goal": "migrate config",
+    "constraints": ["backward compatible"],
+    "decisions": ["additive schema only"],
+    "completed": ["config schema design"],
+    "failed_attempts": [],
+    "open_loops": ["dry-run migration"],
+    "next_action": "resume config work",
+    "evidence_refs": [["beacon:CURRENT", "v5"]],
+    "authority_versions": [["beacon:CURRENT", "v5"], ["git:HEAD", "c8"]],
+    "created_at": 1799900000,
+    "updated_at": 1799900200
+  },
+  "changed_authority": null
+}

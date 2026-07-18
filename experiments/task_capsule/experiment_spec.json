@@ -1,0 +1,22 @@
+{
+  "spec_version": 1,
+  "workload_count": 7,
+  "warmup_samples_per_arm": 1,
+  "measured_samples_per_arm": 30,
+  "pair_order_seed": 20260716,
+  "improvement_threshold_pct": 15,
+  "min_qualifying_workloads": 4,
+  "p95_budget_pct": 110,
+  "token_bytes_per_token": 4,
+  "correctness_fields": ["claims", "evidence_refs", "next_action", "status"],
+  "set_semantics_fields": ["claims", "evidence_refs"],
+  "hard_event_kinds": [
+    "stale_contamination",
+    "cross_task_leakage",
+    "safety_violation",
+    "idempotency_failure",
+    "concurrency_failure"
+  ],
+  "outcomes": ["retain_a", "propose_b_design", "invalid_run", "inconclusive"],
+  "notes": "Frozen before any workload run. Do not retune after result visibility. p95 is the only runtime gate; p50 is report-only. No LLM is invoked; authority reads and assembled bytes are deterministic proxies for real token/tool-call cost."
+}

@@ -1,0 +1,39 @@
+{
+  "name": "changed_constraint",
+  "task_id": "tc-changed-004",
+  "session_ids": ["ses-D1", "ses-D2"],
+  "run_ids": ["run-30", "run-31"],
+  "authority_sources": [
+    {"key": "db1:tasks:804", "version": "v6", "payload": {"title": "export report", "status": "in_progress"}},
+    {"key": "beacon:CURRENT", "version": "v9", "payload": {"slice": "export-slice-001", "next": "export as CSV only", "constraint": "CSV only, PDF dropped"}}
+  ],
+  "observations": [
+    {"source_kind": "opencode", "source_id": "ses-D1", "captured_at": 1800002000, "authority_class": "observational", "version_or_hash": "sha:obsD1", "payload": {"summary": "started PDF export path"}}
+  ],
+  "oracle": {
+    "next_action": "export as CSV only",
+    "status": "in_progress",
+    "claims": ["constraint changed to CSV only"],
+    "evidence_refs": [["beacon:CURRENT", "v9"]]
+  },
+  "expected_reads": ["db1:tasks:804", "beacon:CURRENT"],
+  "forbidden_claims": ["export as PDF", "support both CSV and PDF"],
+  "prior_capsule": {
+    "schema_version": 1,
+    "task_id": "tc-changed-004",
+    "version": 5,
+    "status": "in_progress",
+    "goal": "export report",
+    "constraints": ["support CSV and PDF"],
+    "decisions": ["build PDF exporter first"],
+    "completed": [],
+    "failed_attempts": [],
+    "open_loops": ["PDF exporter"],
+    "next_action": "build PDF exporter",
+    "evidence_refs": [["beacon:CURRENT", "v8"]],
+    "authority_versions": [["beacon:CURRENT", "v8"]],
+    "created_at": 1800002000,
+    "updated_at": 1800002100
+  },
+  "changed_authority": {"key": "beacon:CURRENT", "version": "v9", "payload": {"constraint": "CSV only, PDF dropped"}}
+}

@@ -2,42 +2,39 @@
 
 Status: active
 Part: part-011（收尾接線 + 文件 + 回歸測試）
-Slice: part-011-slice-000 — 作息迴圈接線（completed → routine facet → advisor）
+Slice: part-011-slice-001 — advisor 降頻 + world-diff 知識訊號（todo 5-6）
 
 ## Context
 
-所有規劃 part（001-010）完成。part-011 補既有 part 之間留待後續的接線 + 文件漂移
-+ 測試缺口。計畫權威：`.omo/plans/next-phase-wiring-qa.md`（8 todo，已 gap 分析）。
-注意：本 part-011 是收尾接線，與 PLAN backlog 的 MiroFish part-011 不同。
+part-011-slice-000 已完成歸檔（`.beacon/done/part-011/`）：作息迴圈接線完成
+（820 tests，死程式碼 extract_routine 復活）。
 
 ## Goal
 
-補完 routine 迴圈根因（todo 1-4）：完成事件 → extract_routine → routine facet →
-advisor 偏離偵測 → 建議。死程式碼 extract_routine 從此有 caller。
+校準閉環收尾（todo 5：advisor 降頻）+ part-008↔009 接線（todo 6：world-diff
+new_knowledge 訊號）。
 
 Design authority: `.beacon/parts/part-011/DESIGN.md`
 Slice map: `.beacon/parts/part-011/TODO.md`
 
 ## Allowed scope
 
-- [x] todo 1：writer done → completed 事件 + transcript source_id（5 tests 綠）
-- [ ] todo 2：consolidate 尾端 window-read completed → extract_routine → routine facet
-- [ ] todo 3：advisor routine-deviation 讀真 completed 事件端到端測
-- [ ] todo 4：routine loop 整合測
+- [ ] todo 5：`advisor.push_candidates` 過濾穩定 ignore 的 dedup_key
+- [ ] todo 6：`advisor.observe` world-diff 加 new_knowledge（scout untrusted inbox
+      count-only，防注入）
 
-Files-scope: core/writer.py, core/consolidate.py, tests/test_completed_event.py,
-tests/test_facets_pipeline.py, tests/test_advisor.py, tests/test_routine_loop.py,
+Files-scope: core/advisor.py, tests/test_advisor.py, tests/test_advisor_push.py,
 .beacon/parts/part-011/**, .beacon/CURRENT.md
 
 ## Forbidden scope
 
-- 新 part/表/job；繞過 writer；gate-locked backlog；Task Capsule B 重測；真環境 QA
+- 新 part/表/job；繞過 writer；把 untrusted note 內文餵進 advice；gate-locked backlog
 
 ## Verification target
 
-- Unit: `python -m pytest tests/test_completed_event.py tests/test_facets_pipeline.py tests/test_routine_loop.py -q`
-- Regression: `python -m pytest tests/ -q`（基線 807）
+- Unit: `python -m pytest tests/test_advisor.py tests/test_advisor_push.py -q`
+- Regression: `python -m pytest tests/ -q`（基線 820）
 
 ## Done gate
 
-extract_routine 有 caller；端到端 routine loop 測綠；全綠。
+降頻 + new_knowledge 測綠；全綠。

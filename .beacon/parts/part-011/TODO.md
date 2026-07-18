@@ -7,18 +7,16 @@ Plan authority: `.omo/plans/next-phase-wiring-qa.md`（8 todo，5 元件）
 
 ### part-011-slice-000: 作息迴圈接線（completed 事件 → routine facet → advisor）
 
-Status: in-progress
-
-Goal: 補完 routine 迴圈根因（todo 1-4）：完成事件 → extract_routine → routine facet
-→ advisor 偏離偵測 → 建議。死程式碼 extract_routine 從此有 caller。
+Status: done (2026-07-19; snapshot: `.beacon/done/part-011/part-011-slice-000-done-current.md`)
+820 tests 綠（基線 807 + 13）；死程式碼 extract_routine 復活，真 consolidate manual QA 通過。
 
 Candidate scope:
 - [x] todo 1：`core/writer.py` done → `completed` 事件 + transcript source_id
       （cancel 不寫；state_change 保留）— 5 tests 綠
-- [ ] todo 2：`core/consolidate.py` 尾端 window-read completed → extract_routine →
-      routine facet via writer（durable transcript evidence）
-- [ ] todo 3：advisor routine-deviation 讀真 completed 事件端到端測
-- [ ] todo 4：routine loop 整合測（completed→facet→deviation→advice）
+- [x] todo 2：`core/consolidate.py` `run_routine_producer` window-read（alive+trash）
+      → extract_routine → routine facet via writer（durable transcript evidence）— 5 tests
+- [x] todo 3-4：`tests/test_routine_loop.py` 端到端鎖定（completed→facet→deviation
+      →advice）；advisor 既有邏輯無需改碼 — 3 tests
 
 Files-scope: core/writer.py, core/consolidate.py, tests/test_completed_event.py,
 tests/test_facets_pipeline.py, tests/test_advisor.py, tests/test_routine_loop.py,

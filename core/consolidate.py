@@ -235,6 +235,75 @@ def _emit_facet(group: dict, source_ids: list[str], db: Path | None,
                          f"facet {action} {facet_class}/{facet_key} rejected: {res.detail}")
 
 
+ROUTINE_WINDOW_DAYS = 14   # completed 事件回看視窗(涵蓋代謝週期,防事件歸檔後遺漏)
+
+
+def _completed_in_window(db: Path | None, now_ts: int) -> list[dict]:
+    """讀近 ROUTINE_WINDOW_DAYS 天的 completed 事件(alive + trash;不含 archived)。
+
+    關鍵:completed 事件會被代謝進 trash,故不能只讀 alive;archived 已蒸餾成
+    episodic,routine 訊號已被視窗涵蓋過,排除以免無限重算。回 [{done_at, source_id}]。
+    """
+    since = now_ts - ROUTINE_WINDOW_DAYS * 86400
+    con = stm.connect(db)
+    try:
+        rows = con.execute(
+            "SELECT ts, source_ids FROM events "
+            "WHERE action = 'completed' AND state IN ('alive','trash') AND ts >= ? "
+            "ORDER BY ts", (since,)).fetchall()
+    finally:
+        con.close()
+    out = []
+    for ts, source_ids_json in rows:
+        if not source_ids_json:
+            continue
+        try:
+            sids = json.loads(source_ids_json)
+        except (ValueError, TypeError):
+            continue
+        if sids:
+            out.append({"done_at": ts, "source_id": sids[0]})   # evt:<id>(durable)
+    return out
+
+
+def run_routine_producer(db: Path | None, transcript_dir: Path | None = None,
+                         now_ts: int | None = None) -> dict:
+    """part-011:作息 producer——completed 事件 → extract_routine → routine facet。
+
+    掛在 consolidate.run 尾端(與代謝同跑,在事件歸檔前讀到)。routine facet 的
+    evidence 指向 transcript source_id(durable);走 writer 全驗證。回統計 dict。
+    """
+    from core import facets
+
+    now = now_ts if now_ts is not None else stm.now()
+    completions = _completed_in_window(db, now)
+    obs = facets.extract_routine(completions)
+    if obs is None:
+        return {"routine_facet": False, "completions": len(completions)}
+    existing = stm.facet_get_active(db, "routine", obs.facet_key)
+    action = "reinforce" if existing else "create"
+    proposal = {
+        "agent": "consolidator",
+        "proposal_type": "profile_facet",
+        "target": f"facet:routine/{obs.facet_key}",
+        "payload": {
+            "action": action,
+            "facet_class": "routine",
+            "facet_key": obs.facet_key,
+            "value": obs.value,
+            "evidence_ids": obs.evidence_ids,
+        },
+        "confidence": 0.7,
+        "evidence": [f"routine {obs.value} over {obs.distinct_days} days"],
+    }
+    res = writer.apply(proposal, None, db, transcript_dir)
+    if not res.ok:
+        stm.event_append(db, "consolidator", "proposal_rejected",
+                         f"routine facet {action} rejected: {res.detail}")
+    return {"routine_facet": res.ok, "value": obs.value,
+            "completions": len(completions)}
+
+
 def _add_related(vault: Path, path: str, related_id: str) -> bool:
     """筆記 frontmatter 的 related list 補一筆(去重)。回傳是否真的新增。"""
     note = ltm.read_note(vault, path)
@@ -312,6 +381,10 @@ def run(db: Path | None = None, vault: Path | None = None,
         stats["notes_written"] += written
         if covered:
             stats["archived"] += health.mark_archived(db, covered)
+
+    # part-011:作息 producer——completed 事件 → routine facet(掛蒸餾尾端,與代謝同跑)
+    routine = run_routine_producer(db, transcript_dir, now_ts=ts)
+    stats["routine_facet"] = routine["routine_facet"]
 
     # part-007:facets 落地後,把 active facets 投影成 vault/agent/profile 可讀筆記
     # (facets 是真相,投影是可重建衍生物;低 confidence 由 project_to_vault 過濾)

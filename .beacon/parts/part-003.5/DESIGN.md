@@ -20,13 +20,19 @@ Files-scope 無重疊(channels/dashboard.py + tests/test_dashboard.py 全新檔)
 
 ## Chosen Design
 
-### 技術(INTERFACES §5.2 已定)
+### 技術(2026-07-16 定案:零依賴 stdlib http.server)
 
-- `channels/dashboard.py`:FastAPI app + 內嵌單頁 HTML(一個檔案,零 build)
+**傳輸選型修訂**:原 DESIGN 指定 FastAPI + uvicorn,但兩者未安裝且為重依賴。
+使用者定案改用 Python 標準庫 `http.server`——對齊專案最小依賴哲學(pyproject 僅
+openai + sqlite-vec),同 part-006-slice-002 選手寫 JSON-RPC 而非 mcp SDK 的先例。
+一個唯讀單頁儀表板不需要 web 框架;stdlib 零 build、零新依賴、可完整單元測試。
+
+- `channels/dashboard.py`:`http.server.BaseHTTPRequestHandler` + 內嵌單頁 HTML
+  (一個檔案,零 build);純函式 route dispatch 可單元測試(不起真 server)
 - 資料存取:`sqlite3.connect("file:...?mode=ro", uri=True)`(物理唯讀,
   同 octools 慣例);vault 讀取走 ltm(本就唯讀函式)
-- 啟動:`python -m channels.dashboard` → uvicorn 綁 127.0.0.1:7777
-- 依賴:fastapi + uvicorn 進 optional-dependencies `[dashboard]`
+- 啟動:`python -m channels.dashboard` → `http.server` 綁 127.0.0.1:7777
+- 依賴:**無新依賴**(標準庫)
 
 ### API(INTERFACES §5.3 + directives 版塊)
 
@@ -44,9 +50,9 @@ Files-scope 無重疊(channels/dashboard.py + tests/test_dashboard.py 全新檔)
 
 ### 唯讀保證(三層)
 
-1. FastAPI 只註冊 GET 路由(方法級)
+1. handler 只處理 GET(`do_GET`);`do_POST`/`do_PUT`/`do_DELETE` 一律回 405(方法級)
 2. SQLite `mode=ro` URI(連線級——寫入嘗試 = sqlite 錯誤)
-3. 測試斷言:POST 各端點 → 405;dashboard 模組 import 不含 stm 寫入函式呼叫
+3. 測試斷言:POST 各端點 → 405;dashboard 模組不呼叫任何 stm 寫入函式
 
 ## Verification Targets
 
@@ -58,12 +64,14 @@ Files-scope 無重疊(channels/dashboard.py + tests/test_dashboard.py 全新檔)
 
 ## Unit Test Strategy
 
-fastapi TestClient(不起真 server);測試 DB 塞假資料。
+純函式 `route(method, path, query, db)` -> `(status, content_type, body)`(不起真
+server);測試 DB 塞假資料。另以標準庫 `http.client` 對 in-process server 做一次
+端到端 smoke(可選)。
 
 ## Risks
 
-- fastapi/uvicorn 依賴較重——optional extra 隔離,核心不受影響
 - 單頁 HTML 內嵌 py 檔會長——可接受(零 build 換單檔;超過 ~300 行再拆 static)
+- stdlib http.server 是單執行緒——本機自用單使用者足夠;需並發再評(VPS 階段)
 
 ## Open Questions
 

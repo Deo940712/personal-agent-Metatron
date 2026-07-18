@@ -5,21 +5,23 @@ Design authority: `.beacon/parts/part-003.5/DESIGN.md`
 
 ## SLICE Map
 
-### part-003.5-slice-001: 唯讀儀表板(FastAPI + htmx 單頁)
+### part-003.5-slice-001: 唯讀儀表板(stdlib http.server + 單頁)
 
-Status: planned
+Status: done (2026-07-16; snapshot: `.beacon/done/part-003.5/part-003.5-slice-001-done-current.md`)
+608 tests 綠、UnitTestCore PASS、端到端 HTTP smoke + 5 對抗探針通過。技術選型:零依賴 stdlib http.server(非 FastAPI)。
 
-Goal: 127.0.0.1:7777 唯讀儀表板,六版塊(含 directives)。
+Goal: 127.0.0.1:7777 唯讀儀表板,七版塊(含 directives)。
 
 Outcome: 瀏覽器開 localhost:7777 見真資料;任何寫入方法 405。
 
 Candidate scope:
-- [ ] `channels/dashboard.py`:FastAPI app、8 個 GET API、內嵌單頁 HTML(htmx)
-- [ ] 唯讀三層保證(GET-only 路由、mode=ro 連線、測試斷言)
-- [ ] pyproject:`[dashboard]` optional extra(fastapi + uvicorn)
-- [ ] `tests/test_dashboard.py`:TestClient——各 API 真資料/空 DB/405/mode=ro 實證/
-      directives 表缺失容錯
-- [ ] 手動 QA:瀏覽器實開(需 pip install fastapi uvicorn)
+- [x] `channels/dashboard.py`:**stdlib http.server**、8 個 GET API、內嵌單頁 HTML
+      (route 純函式可單元測試)(30 tests)
+- [x] 唯讀三層保證(GET-only、mode=ro 連線、無 stm 寫入函式呼叫;全實證)
+- [x] pyproject:**無新依賴**(改用標準庫,不需 fastapi/uvicorn extra)
+- [x] `tests/test_dashboard.py`:route 純函式——各 API 真資料/空 DB/405/mode=ro 實證/
+      directives 表缺失容錯 + 端到端 HTTP smoke + 5 對抗探針
+- [ ] 手動 QA:瀏覽器實開(`python -m channels.dashboard`,零安裝)(待使用者環境)
 
 Files-scope: channels/dashboard.py, pyproject.toml, tests/test_dashboard.py
 

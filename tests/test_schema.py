@@ -26,6 +26,8 @@ EXPECTED_COLUMNS = {
                        "last_seen_at", "created_at"},
     "advices": {"id", "priority", "observation", "suggestion", "evidence_ids",
                 "actions", "state", "dedup_key", "expires_at", "created_at"},
+    "watchlist": {"id", "topic", "source_url", "interval_days", "last_checked_at",
+                  "state", "created_at"},
 }
 
 
@@ -46,7 +48,7 @@ def columns(db, table):
 
 def test_all_tables_exist(db):
     assert stm.existing_tables(db) == sorted(stm.TABLES)
-    assert len(stm.TABLES) == 10                          # part-009:+advices
+    assert len(stm.TABLES) == 11                          # part-008:+watchlist
 
 
 @pytest.mark.parametrize("table", sorted(EXPECTED_COLUMNS))

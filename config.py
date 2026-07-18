@@ -54,3 +54,12 @@ ADVICE_DAILY_QUOTA = 3                          # 每日 advice 產出上限(防
 ADVICE_DEDUP_WINDOW_DAYS = 3                    # 同 dedup_key 幾天內不重推
 ADVICE_DEFAULT_TTL_DAYS = 3                     # advice 預設過期天數(LLM 未給時)
 ADVICE_PUSH_MIN_PRIORITY = "medium"            # 只主動推 medium/high(low 查詢時才顯示)
+
+# ── 知識偵察 scout(part-008;網路內容=不受信任資料,非指令) ────────────
+# allowlist:只准這些網域(含子網域)抓取;不在清單 = fail-closed 拒絕。
+# 空清單 = 全拒(必須顯式加入信任來源才能研究)。起步用穩定 RSS/結構化來源。
+SCOUT_ALLOWLIST_DOMAINS = [
+    "arxiv.org", "github.com", "news.ycombinator.com",
+]
+SCOUT_MAX_PER_RUN = 5                            # 每次研究抓取上限(成本控制)
+SCOUT_MIN_INTERVAL_DAYS = 1                      # watchlist 最低複查間隔(下限守衛)

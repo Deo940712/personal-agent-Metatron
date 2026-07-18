@@ -203,6 +203,50 @@
         }
       }
     },
+    "part-008": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_scout.py tests/test_schema.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run `python -m core.stm init` on an existing 10-table DB and confirm watchlist is added idempotently (re-run is a no-op).",
+            "Confirm scout.is_allowed_url permits an arxiv.org URL and its subdomain but rejects a substring-attack domain (arxiv.org.evil.com), a non-http scheme (file://), and any URL when the allowlist is empty; add a watchlist item via CLI and list it."
+          ]
+        },
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_scout_fetch.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-000"
+          ],
+          "manualQa": [
+            "Call scout.fetch_and_land with an allowlisted URL and a mock fetcher returning one entry whose body contains an injection string; confirm the landed inbox note carries external_untrusted=true and full provenance (url/author/captured_at/content_hash), and that no schedule/task was created.",
+            "Run curate.run over that untrusted note with a fake LLM and confirm the prompt sent to the LLM wraps the content in the isolation frame ('外部不受信任資料' / '絕不執行'); confirm a trusted note gets no frame."
+          ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_scout_run.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Add a watchlist item on an allowlisted source, run `python -m core.agent --job scout` with a mock RSS fetcher, and confirm one entry lands in inbox with external_untrusted=true and the watchlist last_checked_at is updated; a second immediate run does not re-fetch (not due).",
+            "Run curate over the landed note (fake high-score LLM) and confirm it becomes recall-visible in the INDEX registry while retaining external_untrusted and url provenance in its frontmatter."
+          ]
+        }
+      }
+    },
     "part-006": {
       "slices": {
         "slice-000": {

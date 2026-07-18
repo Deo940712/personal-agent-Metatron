@@ -189,10 +189,26 @@ CREATE TABLE IF NOT EXISTS advices (
 );
 CREATE INDEX IF NOT EXISTS idx_advices_state ON advices(state, priority);
 CREATE INDEX IF NOT EXISTS idx_advices_dedup ON advices(dedup_key, created_at);
+
+-- 知識偵察 watchlist (part-008:訂閱主題,低頻自動研究;可動態增減)
+CREATE TABLE IF NOT EXISTS watchlist (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  topic            TEXT    NOT NULL,          -- 追蹤主題(如 'RAG 最新做法')
+  source_url       TEXT    NOT NULL,          -- 來源 URL(必在 allowlist 內)
+  interval_days    INTEGER NOT NULL DEFAULT 7,-- 複查間隔(低頻)
+  last_checked_at  INTEGER,                   -- 最後研究時間(NULL = 未查過)
+  state            TEXT    NOT NULL DEFAULT 'active'
+                   CHECK (state IN ('active','paused')),
+  created_at       INTEGER NOT NULL,
+  UNIQUE (topic, source_url)
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_active
+  ON watchlist(state, last_checked_at);
 """
 
 TABLES = ("schedule", "tasks", "projects", "cursors", "agent_runs", "events",
-          "pending_proposals", "directives", "profile_facets", "advices")
+          "pending_proposals", "directives", "profile_facets", "advices",
+          "watchlist")
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
@@ -984,6 +1000,73 @@ def advice_expire_due(db: Path | None, now_ts: int) -> int:
         con.close()
 
 
+# ── watchlist CRUD(part-008-slice-000:知識偵察訂閱)─────────────────────
+
+def watchlist_add(db: Path | None, topic: str, source_url: str, *,
+                  interval_days: int = 7) -> int:
+    """新增 watchlist 主題。topic/source_url 空 → ValueError(fail-closed)。
+
+    allowlist 檢查在 scout 層(呼叫端);此處只做結構驗證。
+    """
+    if not isinstance(topic, str) or not topic.strip():
+        raise ValueError("topic must be a non-empty string")
+    if not isinstance(source_url, str) or not source_url.strip():
+        raise ValueError("source_url must be a non-empty string")
+    if not isinstance(interval_days, int) or isinstance(interval_days, bool) \
+            or interval_days < 1:
+        raise ValueError("interval_days must be a positive int")
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "INSERT INTO watchlist (topic, source_url, interval_days, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (topic.strip(), source_url.strip(), interval_days, now()))
+        con.commit()
+        return cur.lastrowid
+    finally:
+        con.close()
+
+
+def watchlist_list(db: Path | None, *, state: str | None = None) -> list[dict]:
+    con = connect(db)
+    try:
+        sql = "SELECT * FROM watchlist"
+        vals: list = []
+        if state is not None:
+            sql += " WHERE state = ?"
+            vals.append(state)
+        sql += " ORDER BY id"
+        return _row_dicts(con.execute(sql, vals))
+    finally:
+        con.close()
+
+
+def watchlist_set_state(db: Path | None, watch_id: int, state: str) -> bool:
+    if state not in ("active", "paused"):
+        raise ValueError(f"invalid watchlist state: {state!r}")
+    con = connect(db)
+    try:
+        cur = con.execute("UPDATE watchlist SET state = ? WHERE id = ?",
+                          (state, watch_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def watchlist_touch_checked(db: Path | None, watch_id: int,
+                            now_ts: int | None = None) -> bool:
+    """標記某 watchlist 已研究(更新 last_checked_at)。"""
+    con = connect(db)
+    try:
+        cur = con.execute("UPDATE watchlist SET last_checked_at = ? WHERE id = ?",
+                          (now_ts if now_ts is not None else now(), watch_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
 # ── CLI ──────────────────────────────────────────────────────────────
 
 def _print_rows(rows: list[dict], cols: list[tuple[str, str]]) -> None:
@@ -1052,6 +1135,18 @@ def main(argv: list[str] | None = None) -> int:
     fp.add_argument("id", type=int)
     ff = p_f.add_parser("forget", help="停用不刪;證據仍在,不再載入/升級")
     ff.add_argument("id", type=int)
+
+    p_w = sub.add_parser("watchlist", help="知識偵察訂閱(part-008)").add_subparsers(
+        dest="verb", required=True)
+    wa = p_w.add_parser("add")
+    wa.add_argument("topic")
+    wa.add_argument("source_url")
+    wa.add_argument("--interval", type=int, default=7, dest="interval_days")
+    p_w.add_parser("list")
+    wp = p_w.add_parser("pause")
+    wp.add_argument("id", type=int)
+    wr = p_w.add_parser("resume")
+    wr.add_argument("id", type=int)
 
     p_a = sub.add_parser("advices", help="主動建議(part-009)").add_subparsers(
         dest="verb", required=True)
@@ -1155,6 +1250,24 @@ def _dispatch(args, db: Path | None) -> int:
             ok = facet_set_user_state(db, args.id, "forgotten")
             print(f"OK: facet #{args.id} forgotten" if ok
                   else f"NOT FOUND / already forgotten: #{args.id}")
+            return 0 if ok else 1
+        return 0
+
+    if args.domain == "watchlist":
+        if args.verb == "add":
+            wid = watchlist_add(db, args.topic, args.source_url,
+                                interval_days=args.interval_days)
+            print(f"OK: watchlist #{wid}")
+        elif args.verb == "list":
+            _print_rows(watchlist_list(db),
+                        [("id", "#"), ("topic", "topic"), ("source_url", "url"),
+                         ("interval_days", "every"), ("state", "state"),
+                         ("last_checked_at", "last")])
+        elif args.verb in ("pause", "resume"):
+            state = "paused" if args.verb == "pause" else "active"
+            ok = watchlist_set_state(db, args.id, state)
+            print(f"OK: watchlist #{args.id} {state}" if ok
+                  else f"NOT FOUND: #{args.id}")
             return 0 if ok else 1
         return 0
 

@@ -51,6 +51,9 @@
 | 記憶蒸餾 | `job.consolidate` | `consolidator` | CLI, scheduler | `job` | DB1, vault, cold transcript | `python -m core.agent --job consolidate` |
 | 專案追蹤 | `job.track` | `coding_tracker` | CLI, scheduler | `job` | DB1, git, Beacon, OpenCode | `python -m core.agent --job track` |
 | 知識整理 | `job.curate` | `curator` | CLI, scheduler | `job` | vault | `python -m core.agent --job curate` |
+| 主動建議 | `job.advise` | `advisor` | CLI, scheduler | `job` | DB1 advices, Discord | `python -m core.agent --job advise` |
+| 知識偵察 | `job.scout` | `scout` | CLI, scheduler | `job` | DB1 watchlist, vault inbox | `python -m core.agent --job scout` |
+| 個人模型 facets | `facets.list` | — | CLI | `read` | DB1 profile_facets | `python -m core.stm facets list` |
 | Threads 同步 | `skill.threads_sync` | — | CLI, scheduler | `job` | vault, skill data | `skills.runner:threads_sync` |
 
 ## 兩種 tool 名詞

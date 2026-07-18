@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph STORAGE["儲存層"]
-        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>八張表（含 directives，part-006 已實作）")]
+        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>十一張表（+profile_facets/advices/watchlist，part-007/008/009）")]
         DB2[("DB2 Obsidian vault<br/>Markdown 知識介面<br/>semantic/ + episodic/ + agent/")]
         COLD[("冷儲存 transcript<br/>append-only JSONL + .idx<br/>永不刪")]
         VEC[("向量索引<br/>衍生物,可重建")]
@@ -124,6 +124,8 @@ exposure / permission)獨立管理,交集才是實際可執行面。
 | coding_tracker | 三源進度綜合(git + beacon + opencode) | 專案路徑清單 | `project_update` 提案 | ✅ part-005 |
 | sync-{threads,x,fb} | 平台抓取管線(非 LLM,純 CLI;threads 經 skills/runner) | cursor | new_count, status | threads ✅ / x,fb 🔨 phase-0 probe 完成 |
 | recall | RRF 融合檢索答問(index/FTS/向量融合 + rehydrate;found 必附驗證過的引用) | 查詢字串 | 引用來源的答案(≤500 字) | ✅ part-004(引用硬規則 part-006 強化) |
+| advisor(Cassiel) | 主動建議 reflect:讀 world-diff + facets → 可過期 advice(evidence 只用 diff 中真實 id;保守優先級) | world-diff 摘要 + 偏好 facets | `advice` 提案(observation/suggestion/evidence/ttl/dedup_key) | ✅ part-009 |
+| scout(Knowledge Scout) | 網路知識偵察(**非 LLM 抓取** + 觸發判定);外部內容 external_untrusted、必經 curator+writer | watchlist 到期 / goal 缺口 | inbox 筆記(帶溯源 + 污染標籤) | ✅ part-008 |
 
 ### 3.1 提案(Proposal)格式
 
@@ -148,6 +150,7 @@ exposure / permission)獨立管理,交集才是實際可執行面。
 | `project_update` | coding_tracker | `{phase: string, blockers: string[], next_action: string}` |
 | `agent_note` | orchestrator(僅限使用者顯式指示,如「存成 SOP」) | `{subdir: "profile"\|"ops"\|"sop", title: string, body: string, tags: string[]}` |
 | `vault_maintenance` | librarian | `{op: "merge"\|"link"\|"retag"\|"split"\|"archive_stale"\|"fix_index", targets: string[], detail: {...}}` |
+| `profile_facet` | consolidator / advisor(part-007) | `{action: "create"\|"reinforce"\|"supersede", facet_class, facet_key, value, evidence_ids[], supersedes_id?}`;evidence_ids 必存在於 transcript;supersede 需確認 |
 
 writer.py 驗證規則(全部通過才落地):
 
@@ -445,7 +448,7 @@ flowchart LR
 
 ## 5. 資料模型
 
-### 5.1 DB1 `state.db` 完整 DDL(八張表全部已實作)
+### 5.1 DB1 `state.db` 完整 DDL(十一張表全部已實作)
 
 ```sql
 -- 行程 (免疫衰減)
@@ -555,6 +558,60 @@ CREATE TABLE directives (
   consumed_at  INTEGER                    -- 被 session 讀取執行的時間
 );
 CREATE INDEX idx_directives_status ON directives(status, project);
+
+-- 個人模型 facets (part-007:證據驅動 stability;pinned/forgotten 使用者硬覆蓋)
+CREATE TABLE profile_facets (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  facet_class    TEXT    NOT NULL             -- preference|identity|routine|workflow|veto|goal|tooling|style
+                 CHECK (facet_class IN ('preference','identity','routine',
+                                        'workflow','veto','goal','tooling','style')),
+  facet_key      TEXT    NOT NULL,            -- 類內唯一鍵
+  value          TEXT    NOT NULL,
+  confidence     REAL    NOT NULL DEFAULT 0.0,
+  stability      REAL    NOT NULL DEFAULT 0.0,-- 遞增穩定度(重複證據累積)
+  evidence_count INTEGER NOT NULL DEFAULT 0,
+  evidence_ids   TEXT,                        -- JSON array:冷儲存 entry_id(可回水)
+  state          TEXT    NOT NULL DEFAULT 'provisional'
+                 CHECK (state IN ('provisional','stable','superseded','forgotten')),
+  user_state     TEXT    NOT NULL DEFAULT 'auto'
+                 CHECK (user_state IN ('auto','pinned','forgotten')),
+  superseded_by  INTEGER,                     -- 指向新 facet(矛盾修正,不刪舊)
+  first_seen_at  INTEGER NOT NULL,
+  last_seen_at   INTEGER NOT NULL,
+  created_at     INTEGER NOT NULL
+);
+-- 同 class+key 只一個 active(partial unique;superseded/forgotten 歷史可多筆)
+CREATE UNIQUE INDEX idx_facets_unique_active ON profile_facets(facet_class, facet_key)
+  WHERE state IN ('provisional','stable');
+
+-- 主動建議 advices (part-009:world-diff 反思產出的可過期建議;只建議不行動)
+CREATE TABLE advices (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  priority      TEXT    NOT NULL DEFAULT 'low'
+                CHECK (priority IN ('low','medium','high')),
+  observation   TEXT    NOT NULL,             -- world-diff 事實
+  suggestion    TEXT    NOT NULL,
+  evidence_ids  TEXT,                         -- JSON array:溯源
+  actions       TEXT,                         -- JSON array:可選一鍵動作(標準 proposal)
+  state         TEXT    NOT NULL DEFAULT 'pending'
+                CHECK (state IN ('pending','pushed','accepted','ignored','expired')),
+  dedup_key     TEXT,                         -- 去重鍵(同觀察短期不重推)
+  expires_at    INTEGER NOT NULL,             -- 過期即作廢(不堆積)
+  created_at    INTEGER NOT NULL
+);
+
+-- 知識偵察 watchlist (part-008:訂閱主題,低頻自動研究;來源須在 allowlist)
+CREATE TABLE watchlist (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  topic            TEXT    NOT NULL,
+  source_url       TEXT    NOT NULL,          -- 必在 config allowlist 內
+  interval_days    INTEGER NOT NULL DEFAULT 7,-- 複查間隔(低頻)
+  last_checked_at  INTEGER,
+  state            TEXT    NOT NULL DEFAULT 'active'
+                   CHECK (state IN ('active','paused')),
+  created_at       INTEGER NOT NULL,
+  UNIQUE (topic, source_url)
+);
 ```
 
 **記錄原則**(events 只記,防止變成另一種肥大 session):
@@ -831,9 +888,9 @@ sequenceDiagram
 ```
 my-agent/
 ├── core/                    # 無狀態核心
-│   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate/curate/track
+│   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate/curate/track/advise/scout
 │   ├── application.py    ✅ # 統一 invocation 入口(part-006):路由/確認/InvocationResult/agent_runs
-│   ├── stm.py            ✅ # DB1 存取層(八表含 directives,§5.1)+ CLI + pending_claim 原子認領
+│   ├── stm.py            ✅ # DB1 存取層(十一表,§5.1)+ CLI + pending_claim 原子認領
 │   ├── llm.py            ✅ # OpenAI 相容薄層(重試/JSON 模式/降級/events 記錄)
 │   ├── subagents.py      ✅ # 子 agent 執行器(讀契約→組 prompt→單次呼叫→解析)
 │   ├── proposals.py      ✅ # 提案信封 + payload 驗證(§3.1)
@@ -851,14 +908,18 @@ my-agent/
 │   ├── track.py          ✅ # coding_tracker 管線(三源→LLM→project_update)
 │   ├── scanners.py       ✅ # git_scan + beacon_scan(唯讀、全容錯)
 │   ├── octools.py        ✅ # opencode.db 唯讀讀取器(mode=ro;part-006 dev_status 資料層)
+│   ├── facets.py         ✅ # 個人模型(part-007):stability detector/routine 抽取/vault 投影
+│   ├── advisor.py        ✅ # 主動建議(part-009):world-diff observe/reflect/tick/push/校準回饋
+│   ├── scout.py          ✅ # 知識偵察(part-008):allowlist/fetch_and_land/觸發收集/run
 │   ├── tools/            ✅ # 能力層(part-006):catalog/contracts/schedule/tasks/projects/memory
 │   └── mcp/tools.py      ✅ # MCP 工具定義(與傳輸無關):10 工具含 dev_status/directives
 ├── agents/                  # 子 agent 契約:prompt + 輸出 schema + few-shot
 │   ├── schedule.md       ✅ # 行程解析(rrule/remind 預設/evidence=原句)
-│   ├── consolidator.md   ✅ # 蒸餾(episodic/preference/topic/supersedes)
-│   ├── curator.md        ✅ # 評分+分類(閾值 4.0/誠實評分/evidence)
+│   ├── consolidator.md   ✅ # 蒸餾(episodic/preference/topic/supersedes/facet_key)
+│   ├── curator.md        ✅ # 評分+分類(閾值 4.0/誠實評分/evidence/external_untrusted 隔離)
 │   ├── recall.md         ✅ # 代理型(唯讀工具白名單/引用硬規則/superseded_by)
 │   ├── coding_tracker.md ✅ # 三源綜合(beacon 最高權威)
+│   ├── advisor.md        ✅ # 主動建議 reflect(Cassiel;evidence 只用 diff/保守優先級)
 │   └── librarian.md      📋 # backlog-017:vault 維護(§4.3;vault 有量再做)
 ├── channels/                # 介面層(INTERFACES.md):薄 adapter 零業務邏輯
 │   ├── discord_bot.py    ✅ # 白名單 fail-closed/按鈕/DM/延遲 import
@@ -868,12 +929,13 @@ my-agent/
 ├── skills/                  # 非 LLM 抓取管線(純 CLI)
 │   ├── runner.py         ✅ # skill 執行器(五步驟/login_expired 判定/DB1 記錄)
 │   ├── threads_sync_vendor/ ✅ # vendored clone(pin commit;VENDORED.md;零修改黑箱)
+│   ├── web_fetch/        ✅ # 網路抓取(part-008):RSS/Atom stdlib 解析,opener 可注入
 │   ├── x_sync/           🔨 # phase-0 probe 完成(playwright GraphQL 攔截/transform/store+tests)
 │   └── fb_sync/          🔨 # phase-0 probe 完成(saved 清單攔截/transform/store+tests)
 ├── experiments/             # 隔離實驗(不進 core;task_capsule = part-003.2 可丟棄原型)
 ├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
 ├── docs/                 ✅ # MEMORY-{zh,en}(記憶契約)/TOOLS(能力矩陣)/ECC 實驗報告
-├── tests/                ✅ # 630 tests
+├── tests/                ✅ # 778 tests
 └── data/                    # (在 DATA_DIR,OneDrive 外,不 commit)
     ├── state.db             # DB1
     ├── index.db             # 向量索引(衍生物)
@@ -900,9 +962,12 @@ flowchart LR
 | 5 | coding_tracker 三源掃描自動更新 projects 表 | ✅ 2026-07-13(真三源實跑) |
 | 3.5 | localhost:7777 七版塊有真資料;儀表板物理唯讀(GET-only + `mode=ro` + 零寫入呼叫) | ✅ 2026-07-16(端到端 HTTP smoke) |
 | 6 | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到;排行程跨介面確認 | ✅ 程式面 2026-07-16(630 tests + smoke;VPS+Tailscale 真機 QA 待環境,backlog-008) |
+| 7 | 證據驅動 facets(單次不 stable;pin/forget 硬覆蓋;supersede 雙側保留);active facets 投影 vault 且 recall 可見 | ✅ 2026-07-19(端到端:偏好事件→蒸餾→facet→投影) |
+| 9 | world-diff quiet-tick 零 LLM;有變化產可過期 advice(四重防疲勞);action 走確認;校準回饋成 facet | ✅ 程式面 2026-07-19(真 Discord QA 待 token) |
+| 8 | allowlist fail-closed;抓取帶溯源+external_untrusted;注入內容零寫入;只觸發條件研究;端到端 fetch→curate→recall | ✅ 2026-07-19(真網路抓取 QA 待來源) |
 
-後續 part(007 Personal Model / 008 Knowledge Scout / 009 Proactive Advisor /
-010 crowd-scenario)均已設計待 promote,見 §15 與 `.beacon/PLAN.md`。
+自適應助理層(§15)part-007/008/009 **已實作**。剩 part-010 crowd-scenario 已設計待
+promote,見 §15 與 `.beacon/PLAN.md`。
 
 ## 11. 開放決策(實作前定案)
 
@@ -964,11 +1029,15 @@ flowchart LR
 2. **技能 = 獨立 CLI 管線**:每個功能獨立、idempotent、可單獨執行。core 只做路由 + 讀寫 DB。壞一個不倒全部。
 3. **記憶單向流**:DB1 低健康條目 → 夜間蒸餾 → DB2(append-only)。core 永不直接持有長期記憶,用檢索取用。
 
-## 15. 自適應助理層(part-007+,規劃中)
+## 15. 自適應助理層(part-007/008/009 已實作;part-010 待 promote)
 
 > 目標:讓 Metatron 從「幾條各自成熟的管線」進化成「熟悉你、會主動建議、能演練未來」的
 > 助理——但**不變成 OpenHuman 式常駐自主 agent**。「活」= 定期醒來看變化、產可過期建議、
 > 真實行動仍走確認,不是背景無限自我思考、不是自主改狀態。設計依據見各 part DESIGN。
+>
+> **狀態(2026-07-19)**:Personal Model(part-007)、Knowledge Scout(part-008)、
+> Proactive Advisor(part-009)三塊**已實作**(778 tests,端到端 QA 通過);
+> Scenario Rehearsal(part-010)已設計待 promote。
 
 ### 15.1 四個能力(在既有安全邊界內)
 
@@ -994,12 +1063,12 @@ flowchart LR
               └─────────────────────┘
 ```
 
-| 能力 | 做什麼 | 存哪 | 安全邊界 |
-|---|---|---|---|
-| **Personal Model** | 學偏好/作息/流程,證據驅動 stability facets | DB1 `profile_facets` → 投影 vault/agent/profile | 一次行為不 stable;pin/forget 硬覆蓋;走 writer;不改行程 |
-| **Knowledge Scout** | opt-in + allowlist 網路研究 | inbox → curator → writer → vault | web = 資料非指令;`external_untrusted` 標籤;不直接寫入 |
-| **Proactive Advisor** | cron world-diff → 可過期建議 | DB1 `advices` + Discord 推播 | quiet tick 不燒 LLM;只建議;action 走 confirm;有配額/過期 |
-| **Scenario Rehearsal** | 演練「如果…會怎樣」 | vault/scenarios/(非事實層) | 只吃 bucket;硬標 non_authoritative;subprocess 隔離 |
+| 能力 | 狀態 | 做什麼 | 存哪 | 安全邊界 |
+|---|---|---|---|---|
+| **Personal Model** | ✅ part-007 | 學偏好/作息/流程,證據驅動 stability facets | DB1 `profile_facets` → 投影 vault/agent/profile | 一次行為不 stable;pin/forget 硬覆蓋;走 writer;不改行程 |
+| **Knowledge Scout** | ✅ part-008 | opt-in + allowlist 網路研究 | inbox → curator → writer → vault | web = 資料非指令;`external_untrusted` 標籤;不直接寫入 |
+| **Proactive Advisor** | ✅ part-009 | cron world-diff → 可過期建議 | DB1 `advices` + Discord 推播 | quiet tick 不燒 LLM;只建議;action 走 confirm;有配額/過期 |
+| **Scenario Rehearsal** | 📋 part-010 | 演練「如果…會怎樣」 | vault/scenarios/(非事實層) | 只吃 bucket;硬標 non_authoritative;subprocess 隔離 |
 
 ### 15.2 三條新增鐵律(延續既有哲學)
 

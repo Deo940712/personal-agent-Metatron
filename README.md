@@ -1,224 +1,233 @@
-ï»¿# Metatron  â€” å€‹äººè¡Œç¨‹ + çŸ¥è­˜åº«åŠ©ç†
+# Metatron  ¡X ­Ó¤H¦æµ{ + ª¾ÃÑ®w§U²z
 
-> ç¹é«”ä¸­æ–‡ | [English](README-en.md)
+> ÁcÅé¤¤¤å | [English](README-en.md)
 
-ä¸€å€‹**ç„¡ç‹€æ…‹**çš„å€‹äºº AI åŠ©ç†:ç®¡ç†è¡Œç¨‹èˆ‡å¾…è¾¦ã€æŠŠç¤¾äº¤å¹³å°(Threads / X / FB)å­˜çš„
-è²¼æ–‡æ•´ç†é€² Obsidian çŸ¥è­˜åº«ã€è¿½è¹¤ vibe coding å°ˆæ¡ˆé€²åº¦ã€‚å‡ºé–€ç”¨ Discord æ’äº‹æƒ…ã€
-æ”¶æé†’æ¨æ’­;åœ¨å®¶ç”¨ CLI èˆ‡ Obsidianã€‚
+¤@­Ó**µLª¬ºA**ªº­Ó¤H AI §U²z:ºŞ²z¦æµ{»P«İ¿ì¡B§âªÀ¥æ¥­¥x(Threads / X / FB)¦sªº
+¶K¤å¾ã²z¶i Obsidian ª¾ÃÑ®w¡B°lÂÜ vibe coding ±M®×¶i«×¡C¥Xªù¥Î Discord ±Æ¨Æ±¡¡B
+¦¬´£¿ô±À¼½;¦b®a¥Î CLI »P Obsidian¡C
 
-**æ ¸å¿ƒå“²å­¸:æ ¸å¿ƒä¸ç´¯ç©å°è©±ç‹€æ…‹ã€‚** Discord/OpenCode ç­‰ UI å¯ä»¥ç¶­æŒé•· sessionï¼Œ
-ä½†æ¯å‰‡è¨Šæ¯éƒ½æ˜¯ç¨ç«‹ runï¼šè®€æ¬Šå¨è³‡æ–™ â†’ åŸ·è¡Œ â†’ ç¶“é©—è­‰å¯«å› â†’ çµæŸã€‚é€£çºŒæ€§ä¸é 
-è‡ªå‹•é‡æ’­æ•´æ®µèŠå¤©ï¼Œè€Œé  DB1/Beacon/vault/transcript çš„çµæ§‹åŒ–ç‹€æ…‹èˆ‡æŒ‰éœ€æª¢ç´¢ã€‚
+**®Ö¤ß­õ¾Ç:®Ö¤ß¤£²Ö¿n¹ï¸Üª¬ºA¡C** Discord/OpenCode µ¥ UI ¥i¥Hºû«ùªø session¡A
+¦ı¨C«h°T®§³£¬O¿W¥ß run¡GÅªÅv«Â¸ê®Æ ¡÷ °õ¦æ ¡÷ ¸gÅçÃÒ¼g¦^ ¡÷ µ²§ô¡C³sÄò©Ê¤£¾a
+¦Û°Ê­«¼½¾ã¬q²á¤Ñ¡A¦Ó¾a DB1/Beacon/vault/transcript ªºµ²ºc¤Æª¬ºA»P«ö»İÀË¯Á¡C
 
-## æ¶æ§‹ç¸½è¦½
+## ¬[ºcÁ`Äı
 
 ```
-ä½¿ç”¨è€…(CLI / Discord / å„€è¡¨æ¿ / MCP)
-        â”‚
-        â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Orchestrator(ç„¡ç‹€æ…‹,ä¸€æ¬¡å‘¼å«å³çµæŸ)â”‚
-â”‚ è®€ç‹€æ…‹ â†’ æ´¾å·¥å­ agent â†’ ç¶œåˆ â†’ å¯«å› â”‚
-â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜
-       â”‚ scoped ä»»å‹™          â”‚ çµæ§‹åŒ–ææ¡ˆ
-       â–¼                     â–¼
-   å­ agents â”€â”€ææ¡ˆâ”€â”€â–¶ writer.py(å”¯ä¸€å¯«å…¥å£:é©—è­‰å¾Œè½åœ°)
-       â”‚                     â”‚
-       â–¼                     â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ DB1 state.db  â”‚   â”‚ DB2 Obsidian vault     â”‚
-â”‚ SQLite        â”‚   â”‚ Markdown çŸ¥è­˜åº«         â”‚
-â”‚ System of     â”‚   â”‚ semantic/ episodic/    â”‚
-â”‚ Record(7 è¡¨) â”‚   â”‚ agent/(çµ¦ agent çš„çŸ¥è­˜)â”‚
-â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–²â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-       â”‚  å¤œé–“è’¸é¤¾(å¥åº·å€¼ä»£è¬)  â”‚
-       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                  â–¼
-   å†·å„²å­˜ transcript(åŸæ–‡æ°¸ä¸åˆª,å¯å›æ°´)
-   å‘é‡ç´¢å¼• index.db(è¡ç”Ÿç‰©,å¯æ•´æª”é‡å»º)
+¨Ï¥ÎªÌ(CLI / Discord / »öªíªO / MCP)
+        ¢x
+        ¡¿
+¢z¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢{
+¢x Orchestrator(µLª¬ºA,¤@¦¸©I¥s§Yµ²§ô)¢x
+¢x Åªª¬ºA ¡÷ ¬£¤u¤l agent ¡÷ ºî¦X ¡÷ ¼g¦^ ¢x
+¢|¢w¢w¢w¢w¢w¢w¢s¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢s¢w¢w¢w¢w¢w¢w¢w¢}
+       ¢x scoped ¥ô°È          ¢x µ²ºc¤Æ´£®×
+       ¡¿                     ¡¿
+   ¤l agents ¢w¢w´£®×¢w¢w? writer.py(°ß¤@¼g¤J¤f:ÅçÃÒ«á¸¨¦a)
+       ¢x                     ¢x
+       ¡¿                     ¡¿
+¢z¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢{   ¢z¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢{
+¢x DB1 state.db  ¢x   ¢x DB2 Obsidian vault     ¢x
+¢x SQLite        ¢x   ¢x Markdown ª¾ÃÑ®w         ¢x
+¢x System of     ¢x   ¢x semantic/ episodic/    ¢x
+¢x Record(7 ªí) ¢x   ¢x agent/(µ¹ agent ªºª¾ÃÑ)¢x
+¢|¢w¢w¢w¢w¢w¢w¢s¢w¢w¢w¢w¢w¢w¢w¢w¢}   ¢|¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¡¶¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢}
+       ¢x  ©]¶¡»]ÃH(°·±d­È¥NÁÂ)  ¢x
+       ¢|¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢s¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢w¢}
+                  ¡¿
+   §NÀx¦s transcript(­ì¤å¥Ã¤£§R,¥i¦^¤ô)
+   ¦V¶q¯Á¤Ş index.db(­l¥Íª«,¥i¾ãÀÉ­««Ø)
 ```
 
-å››å€‹å„²å­˜å±¤,å„å¸å…¶è·:
+¥|­ÓÀx¦s¼h,¦U¥q¨äÂ¾:
 
-| å„²å­˜ | è§’è‰² |
+| Àx¦s | ¨¤¦â |
 |---|---|
-| **DB1** `state.db`(SQLite) | System of Record:è¡Œç¨‹ã€å¾…è¾¦ã€å°ˆæ¡ˆã€äº‹ä»¶ã€æ¸¸æ¨™ã€å¾…ç¢ºèªææ¡ˆ |
-| **DB2** Obsidian vault(Markdown) | äººé¡çŸ¥è­˜ä»‹é¢:ä½ åœ¨ Obsidian è®€å¯«çš„ç­†è¨˜ |
-| **å†·å„²å­˜** transcript(JSONL + ç´¢å¼•) | åŸå§‹è¨˜éŒ„å±¤:è’¸é¤¾å‰çš„åŸæ–‡,append-only æ°¸ä¸åˆª |
-| **å‘é‡ç´¢å¼•** index.db(sqlite-vec + FTS5) | è¡ç”Ÿç‰©:å£äº†åˆªæ‰é‡å»º,ä¸å­˜å”¯ä¸€è³‡æ–™ |
+| **DB1** `state.db`(SQLite) | System of Record:¦æµ{¡B«İ¿ì¡B±M®×¡B¨Æ¥ó¡B´å¼Ğ¡B«İ½T»{´£®× |
+| **DB2** Obsidian vault(Markdown) | ¤HÃşª¾ÃÑ¤¶­±:§A¦b Obsidian Åª¼gªºµ§°O |
+| **§NÀx¦s** transcript(JSONL + ¯Á¤Ş) | ­ì©l°O¿ı¼h:»]ÃH«eªº­ì¤å,append-only ¥Ã¤£§R |
+| **¦V¶q¯Á¤Ş** index.db(sqlite-vec + FTS5) | ­l¥Íª«:Ãa¤F§R±¼­««Ø,¤£¦s°ß¤@¸ê®Æ |
 
-## è¨˜æ†¶ç³»çµ±(æ ¸å¿ƒè³£é»)
+## °O¾Ğ¨t²Î(®Ö¤ß½æÂI)
 
-è¨˜æ†¶æŒ‰æ€§è³ªåˆ†å››å±¤ã€æŒ‰ç”Ÿå‘½é€±æœŸç”¨ã€Œå¥åº·å€¼ä»£è¬ã€ç®¡ç†(å€Ÿé‘‘ memory-river / MemGPT /
-Mem0 / Hermes ç­‰,è¨­è¨ˆä¾æ“šè¦‹ [ARCHITECTURE.md](ARCHITECTURE.md) Â§12):
+°O¾Ğ«ö©Ê½è¤À¥|¼h¡B«ö¥Í©R¶g´Á¥Î¡u°·±d­È¥NÁÂ¡vºŞ²z(­ÉÅ² memory-river / MemGPT /
+Mem0 / Hermes µ¥,³]­p¨Ì¾Ú¨£ [ARCHITECTURE.md](ARCHITECTURE.md) ¡±12):
 
-| å±¤ | å›ç­”çš„å•é¡Œ | å­˜å“ª |
+| ¼h | ¦^µªªº°İÃD | ¦s­ş |
 |---|---|---|
-| Working State | ã€Œåšåˆ°å“ªäº†?ã€ | DB1(tasks / cursors / projects) |
-| Episodic æƒ…ç¯€ | ã€Œç™¼ç”Ÿéä»€éº¼?ã€ | DB1 events â†’ è’¸é¤¾é€² vault `episodic/` |
-| Semantic èªç¾© | ã€Œæˆ‘çŸ¥é“ä»€éº¼?ã€ | vault `semantic/`(è²¼æ–‡çŸ¥è­˜)+ `agent/`(çµ¦ agent çš„åå¥½/æ•™è¨“/SOP) |
-| Procedural ç¨‹åº | ã€Œæ€éº¼åš?ã€ | `agents/*.md` å¥‘ç´„ + `skills/` ç¨‹å¼ç¢¼ |
+| Working State | ¡u°µ¨ì­ş¤F?¡v | DB1(tasks / cursors / projects) |
+| Episodic ±¡¸` | ¡uµo¥Í¹L¤°»ò?¡v | DB1 events ¡÷ »]ÃH¶i vault `episodic/` |
+| Semantic »y¸q | ¡u§Úª¾¹D¤°»ò?¡v | vault `semantic/`(¶K¤åª¾ÃÑ)+ `agent/`(µ¹ agent ªº°¾¦n/±Ğ°V/SOP) |
+| Procedural µ{§Ç | ¡u«ç»ò°µ?¡v | `agents/*.md` «´¬ù + `skills/` µ{¦¡½X |
 
-**å¥åº·å€¼ä»£è¬**:è¨˜æ†¶è¢«æª¢ç´¢å‘½ä¸­å°±å›è¡€ã€ä¹…ä¸ç”¨å°±è¡°æ¸›;æ­¸é›¶é€²åƒåœ¾æ¡¶(ä¿ç•™ 14 å¤©,
-æœŸå…§è¢«å¼•ç”¨å¯å¾©æ´»)â†’ åˆ°æœŸç”± LLM è’¸é¤¾æˆ vault ç­†è¨˜ã€‚**éºå¿˜ = ä¸å†ä¸»å‹•è¼‰å…¥,
-ä¸ç­‰æ–¼åˆªé™¤**â€”â€”åŸæ–‡æ°¸åœ¨å†·å„²å­˜,è’¸é¤¾ç­†è¨˜å¸¶ `source_ids` éš¨æ™‚å¯ã€Œå›æ°´ã€è®€å›åŸæ–‡ã€‚
+**°·±d­È¥NÁÂ**:°O¾Ğ³QÀË¯Á©R¤¤´N¦^¦å¡B¤[¤£¥Î´N°I´î;Âk¹s¶i©U§£±í(«O¯d 14 ¤Ñ,
+´Á¤º³Q¤Ş¥Î¥i´_¬¡)¡÷ ¨ì´Á¥Ñ LLM »]ÃH¦¨ vault µ§°O¡C**¿ò§Ñ = ¤£¦A¥D°Ê¸ü¤J,
+¤£µ¥©ó§R°£**¡X¡X­ì¤å¥Ã¦b§NÀx¦s,»]ÃHµ§°O±a `source_ids` ÀH®É¥i¡u¦^¤ô¡vÅª¦^­ì¤å¡C
 
-**å››æ®µç´šè¯æª¢ç´¢**:
+**¥|¬q¯ÅÁpÀË¯Á**:
 ```
-â‘  index-first(INDEX ä¸€è¡Œæè¿°,é›¶æˆæœ¬)
-â‘¡ FTS5 å…¨æ–‡(ä¸­æ–‡ trigram,é›¶ embedding æˆæœ¬)
-â‘¢ å‘é‡ KNN(sqlite-vec,èªæ„æª¢ç´¢)
-â‘£ rehydrate(æ²¿ source_ids è®€å›åŸæ–‡,è¦ç¢ºåˆ‡æ•¸å­—/åå­—æ™‚)
+? index-first(INDEX ¤@¦æ´y­z,¹s¦¨¥»)
+? FTS5 ¥ş¤å(¤¤¤å trigram,¹s embedding ¦¨¥»)
+? ¦V¶q KNN(sqlite-vec,»y·NÀË¯Á)
+? rehydrate(ªu source_ids Åª¦^­ì¤å,­n½T¤Á¼Æ¦r/¦W¦r®É)
 ```
 
-æŠ€è¡“ç´°ç¯€(å®Œæ•´ APIã€ä¸è®Šé‡ã€æ•…éšœæ¢å¾©):[docs/MEMORY-zh.md](docs/MEMORY-zh.md)
+§Ş³N²Ó¸`(§¹¾ã API¡B¤£ÅÜ¶q¡B¬G»Ù«ì´_):[docs/MEMORY-zh.md](docs/MEMORY-zh.md)
 
-### å¤šå±¤è¨˜æ†¶ï¼šç›®å‰ä»åœ¨è©•ä¼°
+### ¦h¼h°O¾Ğ¡G¥Ø«e¤´¦bµû¦ô
 
-ä¸è¦æ··æ·†ã€Œå„²å­˜åˆ†å±¤ã€ã€Œæª¢ç´¢éšæ®µã€ã€Œè·¨ run ä»»å‹™ checkpointã€èˆ‡ã€ŒLLM è‡ªä¸»
-STMâ†’MTMâ†’LPM pagingã€ã€‚ç›®å‰åªæœ‰ **Aï¼šç„¡ç‹€æ…‹é‡å»º + æŒ‰éœ€æª¢ç´¢**å·²å¯¦ä½œï¼›
-**Bï¼šTask Capsule**ã€**Cï¼štask-scoped warm set**ã€**Dï¼šLLM è‡ªä¸» paging**å‡æ˜¯
-å€™é¸æ–¹æ¡ˆï¼ŒæŒ‰ Aâ†’Bâ†’Câ†’D ä»¥çœŸå¯¦é•·ä»»å‹™æ¯”è¼ƒï¼Œå‰ä¸€ç´šè¶³å¤ å°±ä¸å¢åŠ è¤‡é›œåº¦ã€‚
+¤£­n²V²c¡uÀx¦s¤À¼h¡v¡uÀË¯Á¶¥¬q¡v¡u¸ó run ¥ô°È checkpoint¡v»P¡uLLM ¦Û¥D
+STM¡÷MTM¡÷LPM paging¡v¡C¥Ø«e¥u¦³ **A¡GµLª¬ºA­««Ø + «ö»İÀË¯Á**¤w¹ê§@¡F
+**B¡GTask Capsule**¡B**C¡Gtask-scoped warm set**¡B**D¡GLLM ¦Û¥D paging**§¡¬O
+­Ô¿ï¤è®×¡A«ö A¡÷B¡÷C¡÷D ¥H¯u¹êªø¥ô°È¤ñ¸û¡A«e¤@¯Å¨¬°÷´N¤£¼W¥[½ÆÂø«×¡C
 
-**è¨˜æ†¶å¼·åŒ–(part-004.5,å·²å®Œæˆ,ä¾ 2026 è«–æ–‡å¯¦è­‰)**:ä¸»é¡Œé€£çºŒæ€§è’¸é¤¾(Membox:
-åŒä¸»é¡Œè·¨å¤©é›™å‘ related ä¸²é€£)ã€çŸ›ç›¾åµæ¸¬ + supersede åŸ·è¡Œ(Mneme:æ–°èˆŠåå¥½é›™å´
-ä¿ç•™ã€recall è®€åˆ°è¢«å–ä»£ç­†è¨˜æœƒæç¤ºæ–°ç‰ˆ)ã€RRF è·¨æ®µèåˆæª¢ç´¢(Cognis:k=60,
-å¼·å‘½ä¸­ä¿ç•™é›¶æˆæœ¬çŸ­è·¯)ã€‚å¾…è¨‚(è§¸ç™¼æ¢ä»¶åˆ¶):cross-encoder rerank(golden
-queries å‡ºæ’åå•é¡Œæ™‚)ã€per-category è¡°æ¸›é€Ÿç‡(çœŸå¯¦ä½¿ç”¨ 1-2 æœˆæœ‰æ•¸æ“šæ™‚)ã€‚
+**°O¾Ğ±j¤Æ(part-004.5,¤w§¹¦¨,¨Ì 2026 ½×¤å¹êÃÒ)**:¥DÃD³sÄò©Ê»]ÃH(Membox:
+¦P¥DÃD¸ó¤ÑÂù¦V related ¦ê³s)¡B¥Ù¬Ş°»´ú + supersede °õ¦æ(Mneme:·sÂÂ°¾¦nÂù°¼
+«O¯d¡Brecall Åª¨ì³Q¨ú¥Nµ§°O·|´£¥Ü·sª©)¡BRRF ¸ó¬q¿Ä¦XÀË¯Á(Cognis:k=60,
+±j©R¤¤«O¯d¹s¦¨¥»µu¸ô)¡C«İ­q(Ä²µo±ø¥ó¨î):cross-encoder rerank(golden
+queries ¥X±Æ¦W°İÃD®É)¡Bper-category °I´î³t²v(¯u¹ê¨Ï¥Î 1-2 ¤ë¦³¼Æ¾Ú®É)¡C
 
-## æ‰€æœ‰ Agent çš„è·èƒ½
+## ©Ò¦³ Agent ªºÂ¾¯à
 
-**å°ˆæ¡ˆä»£è™Ÿ:Metatron**(å¤©ç•Œæ›¸è¨˜å®˜)â€”â€”orchestrator æœ¬äººã€‚å­ agent å¾
-Metatron éº¾ä¸‹å¤©ä½¿åæŒ‘é¸(é¡¯ç¤ºå±¤å‘½å;ç¨‹å¼ç¢¼è­˜åˆ¥ç¬¦ç¶­æŒæŠ€è¡“åä»¥ä¿ API ç©©å®š,
-å®Œæ•´æ˜ å°„è¦‹ [AGENTS.md](AGENTS.md) Â§Angel naming registry)ã€‚
+**±M®×¥N¸¹:Metatron**(¤Ñ¬É®Ñ°O©x)¡X¡Xorchestrator ¥»¤H¡C¤l agent ±q
+Metatron ¾£¤U¤Ñ¨Ï¦W¬D¿ï(Åã¥Ü¼h©R¦W;µ{¦¡½XÃÑ§O²Åºû«ù§Ş³N¦W¥H«O API Ã­©w,
+§¹¾ã¬M®g¨£ [AGENTS.md](AGENTS.md) ¡±Angel naming registry)¡C
 
-**æ‹“æ’²:Orchestrator + ç„¡ç‹€æ…‹å­ agent**(2026 å¹´ LangGraph / Claude Agent SDK /
-OpenAI Agents SDK æ”¶æ–‚çš„ç”Ÿç”¢æ¨™æº–)ã€‚å­ agent æ‹¿ scoped è¼¸å…¥ã€å›çµæ§‹åŒ–ææ¡ˆã€å³æ£„ã€‚
+**©İ¼³:Orchestrator + µLª¬ºA¤l agent**(2026 ¦~ LangGraph / Claude Agent SDK /
+OpenAI Agents SDK ¦¬ÀÄªº¥Í²£¼Ğ·Ç)¡C¤l agent ®³ scoped ¿é¤J¡B¦^µ²ºc¤Æ´£®×¡B§Y±ó¡C
 
-### å¯«å…¥éµå¾‹ï¼šAgent å¯ç”¨ scoped toolsï¼Œç¨‹å¼é©—è­‰ï¼Œå–®ä¸€ commit boundary
+### ¼g¤JÅK«ß¡GAgent ¥i¥Î scoped tools¡Aµ{¦¡ÅçÃÒ¡A³æ¤@ commit boundary
 
-å­ agent å¯ä¾ allowlist è‡ªä¸»å‘¼å« read/propose/ä½é¢¨éšª auto-apply capabilityï¼Œä¸éœ€è¦
-Metatron ä»£è¾¦æ¯æ¬¡ tool callï¼›ä½† LLM æ°¸ä¸å–å¾— raw SQLã€DB connectionã€ä»»æ„æª”æ¡ˆå¯«å…¥
-æˆ–è£¸ `writer.apply`ã€‚agent/ä½¿ç”¨è€…ç™¼èµ·çš„ proposal mutation èµ° `writer.apply` é©—è­‰ï¼›
-å—ä¿¡ä»»çš„å…§éƒ¨ job pipelineï¼ˆå¦‚å¤œé–“è’¸é¤¾ï¼‰èµ°å„è‡ªçš„ deterministic validated write pathï¼›
-å…©è€…çš†ä¸ç¹éé©—è­‰ã€‚é«˜é¢¨éšªæ“ä½œ previewâ†’confirmï¼Œé€¾æ™‚ä¸€å¾‹æ‹’çµ•ã€‚Metatron æ˜¯ control
-planeï¼Œä¸æ˜¯æ‰€æœ‰å·¥å…·çš„åŒæ­¥ data-plane proxyã€‚
+¤l agent ¥i¨Ì allowlist ¦Û¥D©I¥s read/propose/§C­·ÀI auto-apply capability¡A¤£»İ­n
+Metatron ¥N¿ì¨C¦¸ tool call¡F¦ı LLM ¥Ã¤£¨ú±o raw SQL¡BDB connection¡B¥ô·NÀÉ®×¼g¤J
+©Î»r `writer.apply`¡Cagent/¨Ï¥ÎªÌµo°_ªº proposal mutation ¨« `writer.apply` ÅçÃÒ¡F
+¨ü«H¥ôªº¤º³¡ job pipeline¡]¦p©]¶¡»]ÃH¡^¨«¦U¦Ûªº deterministic validated write path¡F
+¨âªÌ¬Ò¤£Â¶¹LÅçÃÒ¡C°ª­·ÀI¾Ş§@ preview¡÷confirm¡A¹O®É¤@«ß©Úµ´¡CMetatron ¬O control
+plane¡A¤£¬O©Ò¦³¤u¨ãªº¦P¨B data-plane proxy¡C
 
-### å­ agent ä¸€è¦½
+### ¤l agent ¤@Äı
 
-| å¤©ä½¿ / å­ Agent | è·èƒ½ | è¼¸å…¥ | è¼¸å‡º | ç‹€æ…‹ |
+| ¤Ñ¨Ï / ¤l Agent | Â¾¯à | ¿é¤J | ¿é¥X | ª¬ºA |
 |---|---|---|---|---|
-| **Sandalphon** â€” `schedule` | è‡ªç„¶èªè¨€ â†’ è¡Œç¨‹/å¾…è¾¦ææ¡ˆ(ã€Œæ˜å¤©ä¸‹åˆå…©é»é–‹æœƒæå‰30åˆ†æé†’ã€);rrule é‡è¤‡è¡Œç¨‹ | ä½¿ç”¨è€…åŸå¥ + ç¾æœ‰è¡Œç¨‹ | `schedule_change` / `task_change` ææ¡ˆ | âœ… |
-| **Raziel** â€” `consolidator` | å¤œé–“è’¸é¤¾:åˆ°æœŸäº‹ä»¶ â†’ æ—¥èªŒæ‘˜è¦(episodic)/ ä½¿ç”¨è€…åå¥½(agent/profile);æ¯å€‹æ±ºç­–éæ¬„ä½ç´šé©—è­‰,ä¸å¾—è™›æ§‹ä¾†æº | åˆ°æœŸ events æ‰¹æ¬¡ | è’¸é¤¾çµ„(kind/title/summary/tags/source_ids/confidence) | âœ… |
-| **Jophiel** â€” `curator` | è²¼æ–‡è©•åˆ†(0-10 é–˜é–€ 4.0)ã€åˆ†é¡ã€ä¾æ—¥æœŸå»é‡ã€å…¥ vault;manual_tags æ°¸ä¸è¦†è“‹ | inbox ç­†è¨˜æ‰¹æ¬¡ | `classify_note` ææ¡ˆ | âœ… |
-| **Zerachiel** â€” `recall` | çŸ¥è­˜åº«å•ç­”:indexâ†’FTSâ†’å‘é‡ RRF èåˆ + rehydrate;éç©ºå¼•ç”¨é€ä¸€é©—è­‰çœŸå¯¦æ€§(å‡å¼•ç”¨æ•´ç­”ä¸Ÿæ£„);superseded_by æç¤º;åš´æ ¼ found/not_found(found å¿…é™„ â‰¥1 é©—è­‰éå¼•ç”¨,ç©ºå¼•ç”¨ä¸€å¾‹ not_found,part-006 å·²å¯¦ä½œ) | æŸ¥è©¢å­—ä¸² | å¸¶å¼•ç”¨çš„ç­”æ¡ˆ | âœ… |
-| **Uriel** â€” `coding_tracker` | vibe coding é€²åº¦:ä¸‰æºå”¯è®€æƒæ(git + `.beacon/CURRENT` + OpenCode sessions,beacon æœ€é«˜æ¬Šå¨)â†’ æ¯å°ˆæ¡ˆ phase/blockers/next | å·²è¨»å†Šå°ˆæ¡ˆ | `project_update` ææ¡ˆ | âœ… |
-| **Anael** â€” `librarian` | vault åœ–æ›¸ç®¡ç†å“¡:å­¤å…’/æ–·éˆ/é‡è¤‡/tag è”“å»¶ç¶­è­·;å…©éšæ®µã€å¿«ç…§å¯å›æ»¾ã€æ°¸ä¸åˆªé™¤ | vault.scan ç¢ºå®šæ€§å ±å‘Š | `vault_maintenance` ææ¡ˆ(dry-run å…ˆè¡Œ) | ğŸ“‹ backlog-017 |
-| sync-{threads,x,fb} | å¹³å°æŠ“å–ç®¡ç·š(**é LLM**,ç´” CLI,idempotent å¯çºŒå‚³) | cursor | new_count, status | threads âœ… / x,fb ğŸ”¨ phase-0 probe å®Œæˆ |
+| **Sandalphon** ¡X `schedule` | ¦ÛµM»y¨¥ ¡÷ ¦æµ{/«İ¿ì´£®×(¡u©ú¤Ñ¤U¤È¨âÂI¶}·|´£«e30¤À´£¿ô¡v);rrule ­«½Æ¦æµ{ | ¨Ï¥ÎªÌ­ì¥y + ²{¦³¦æµ{ | `schedule_change` / `task_change` ´£®× | ? |
+| **Raziel** ¡X `consolidator` | ©]¶¡»]ÃH:¨ì´Á¨Æ¥ó ¡÷ ¤é»xºK­n(episodic)/ ¨Ï¥ÎªÌ°¾¦n(agent/profile);¨C­Ó¨Mµ¦¹LÄæ¦ì¯ÅÅçÃÒ,¤£±oµêºc¨Ó·½ | ¨ì´Á events §å¦¸ | »]ÃH²Õ(kind/title/summary/tags/source_ids/confidence) | ? |
+| **Jophiel** ¡X `curator` | ¶K¤åµû¤À(0-10 ¹hªù 4.0)¡B¤ÀÃş¡B¨Ì¤é´Á¥h­«¡B¤J vault;manual_tags ¥Ã¤£ÂĞ»\ | inbox µ§°O§å¦¸ | `classify_note` ´£®× | ? |
+| **Zerachiel** ¡X `recall` | ª¾ÃÑ®w°İµª:index¡÷FTS¡÷¦V¶q RRF ¿Ä¦X + rehydrate;«DªÅ¤Ş¥Î³v¤@ÅçÃÒ¯u¹ê©Ê(°²¤Ş¥Î¾ãµª¥á±ó);superseded_by ´£¥Ü;ÄY®æ found/not_found(found ¥²ªş ?1 ÅçÃÒ¹L¤Ş¥Î,ªÅ¤Ş¥Î¤@«ß not_found,part-006 ¤w¹ê§@) | ¬d¸ß¦r¦ê | ±a¤Ş¥Îªºµª®× | ? |
+| **Uriel** ¡X `coding_tracker` | vibe coding ¶i«×:¤T·½°ßÅª±½´y(git + `.beacon/CURRENT` + OpenCode sessions,beacon ³Ì°ªÅv«Â)¡÷ ¨C±M®× phase/blockers/next | ¤wµù¥U±M®× | `project_update` ´£®× | ? |
+| **Cassiel** ¡X `advisor` | ¥D°Ê«ØÄ³:world-diff quiet-tick(µLÅÜ¤Æ¹s LLM)¡÷ ²£¥i¹L´Á advice(¥|­«¨¾¯h³Ò);action ¨«½T»{¡B®Õ·Ç¦^õX¦¨ facet | world-diff + °¾¦n facets | `advice` ´£®× + Discord ±À¼½ | ? part-009 |
+| **scout** ¡X `Knowledge Scout` | ºô¸ôª¾ÃÑ°»¹î:allowlist fail-closed §ì¨ú(**«D LLM**)+ external_untrusted ¹jÂ÷;¥uÄ²µo±ø¥ó¤U¬ã¨s | watchlist ¨ì´Á / goal ¯Ê¤f | inbox µ§°O(±a·¹·½ + ¦Ã¬V¼ĞÅÒ) | ? part-008 |
+| **Anael** ¡X `librarian` | vault ¹Ï®ÑºŞ²z­û:©t¨à/Â_Ãì/­«½Æ/tag ½¯©µºûÅ@;¨â¶¥¬q¡B§Ö·Ó¥i¦^ºu¡B¥Ã¤£§R°£ | vault.scan ½T©w©Ê³ø§i | `vault_maintenance` ´£®×(dry-run ¥ı¦æ) | ?? backlog-017 |
+| sync-{threads,x,fb} | ¥­¥x§ì¨úºŞ½u(**«D LLM**,¯Â CLI,idempotent ¥iÄò¶Ç) | cursor | new_count, status | threads ? / x,fb ?? phase-0 probe §¹¦¨ |
 
-> Michael / Camael / Raphael / Ophanim / Cassiel / Azrael æ˜¯ä½¿ç”¨è€…æåä½†**ç›®å‰ç„¡å°æ‡‰ agent** çš„å¤©ä½¿å,
-> å·²åœ¨ [AGENTS.md](AGENTS.md) Â§Angel naming registry ã€ŒArchivedã€æ®µå°å­˜ã€‚æ—¥å¾Œè‹¥çœŸçš„ç¨ç«‹æˆ agent æ‰å•Ÿç”¨,ä¸é å…ˆä½”ä½ã€‚
+> Michael / Camael / Raphael / Ophanim / Azrael ¬O¨Ï¥ÎªÌ´£¦W¦ı**¥Ø«eµL¹ïÀ³ agent** ªº¤Ñ¨Ï¦W,
+> ¤w¦b [AGENTS.md](AGENTS.md) ¡±Angel naming registry ¡uArchived¡v¬q«Ê¦s¡C¤é«á­Y¯uªº¿W¥ß¦¨ agent ¤~±Ò¥Î,¤£¹w¥ı¦û¦ì¡C
 
-å­ agent åˆ†å…©å‹:**ç´”å‡½æ•¸å‹**(å–®æ¬¡ LLM å‘¼å«ã€ç„¡å·¥å…·ã€å¯é‡æ”¾æ¸¬è©¦â€”â€”schedule/
-consolidator/curator/librarian/coding_tracker)èˆ‡**ä»£ç†å‹**(ç›®å‰ recall ä½¿ç”¨è¿­ä»£å”¯è®€
-å·¥å…·)ã€‚æœªä¾†æ˜¯å¦çµ¦æ›´å¤š agent å·¥å…·ï¼Œä¾ã€Œä¸‹ä¸€æ­¥æ˜¯å¦çœŸçš„ä¾è³´å‰ä¸€æ­¥çµæœã€æ±ºå®šï¼Œä¸¦å—
-scope/budget/timeout æ§åˆ¶ï¼›shared-state commit ä»åªæœ‰ deterministic writer boundaryã€‚
+¤l agent ¤À¨â«¬:**¯Â¨ç¼Æ«¬**(³æ¦¸ LLM ©I¥s¡BµL¤u¨ã¡B¥i­«©ñ´ú¸Õ¡X¡Xschedule/
+consolidator/curator/librarian/coding_tracker)»P**¥N²z«¬**(¥Ø«e recall ¨Ï¥Î­¡¥N°ßÅª
+¤u¨ã)¡C¥¼¨Ó¬O§_µ¹§ó¦h agent ¤u¨ã¡A¨Ì¡u¤U¤@¨B¬O§_¯uªº¨Ì¿à«e¤@¨Bµ²ªG¡v¨M©w¡A¨Ã¨ü
+scope/budget/timeout ±±¨î¡Fshared-state commit ¤´¥u¦³ deterministic writer boundary¡C
 
-## ä»‹é¢
+## ¤¶­±
 
-| ä»‹é¢ | å ´æ™¯ | è®€/å¯« | ç‹€æ…‹ |
+| ¤¶­± | ³õ´º | Åª/¼g | ª¬ºA |
 |---|---|---|---|
-| **CLI** | é–‹ç™¼ã€æ’ç¨‹ job | è®€+å¯« | âœ… |
-| **Obsidian** | çŸ¥è­˜åº«é–±è®€/ç·¨è¼¯(vault å°±æ˜¯ UI) | è®€+å¯« | âœ…(é›¶æˆæœ¬) |
-| **Discord bot** | å‡ºé–€:æ’äº‹æƒ…(é è¦½â†’âœ…æŒ‰éˆ•â†’è½åœ°)+ æé†’ DM æ¨æ’­;ç§äºº server é– user id | è®€+å¯«(èµ° writer+ç¢ºèª) | âœ… ç¨‹å¼é¢ |
-| ç¶²é å„€è¡¨æ¿ | åœ¨å®¶ç¸½è¦½ + ç³»çµ±å¥åº·(127.0.0.1:7777;GET-only + mode=ro ä¸‰å±¤å”¯è®€) | å”¯è®€ | âœ… |
-| MCP server(stdio + Tailscale HTTP) | åœ¨ OpenCode/Claude Code å…§å•åŠ©ç†/æ’ç¨‹/é ç«¯é–‹ç™¼è¿´åœˆ | è®€+å¯«(å¯«èµ° pending ç¢ºèª) | âœ… ç¨‹å¼é¢(VPS çœŸæ©Ÿ QA å¾…ç’°å¢ƒ) |
+| **CLI** | ¶}µo¡B±Æµ{ job | Åª+¼g | ? |
+| **Obsidian** | ª¾ÃÑ®w¾\Åª/½s¿è(vault ´N¬O UI) | Åª+¼g | ?(¹s¦¨¥») |
+| **Discord bot** | ¥Xªù:±Æ¨Æ±¡(¹wÄı¡÷?«ö¶s¡÷¸¨¦a)+ ´£¿ô DM ±À¼½;¨p¤H server Âê user id | Åª+¼g(¨« writer+½T»{) | ? µ{¦¡­± |
+| ºô­¶»öªíªO | ¦b®aÁ`Äı + ¨t²Î°·±d(127.0.0.1:7777;GET-only + mode=ro ¤T¼h°ßÅª) | °ßÅª | ? |
+| MCP server(stdio + Tailscale HTTP) | ¦b OpenCode/Claude Code ¤º°İ§U²z/±Æµ{/»·ºİ¶}µo°j°é | Åª+¼g(¼g¨« pending ½T»{) | ? µ{¦¡­±(VPS ¯u¾÷ QA «İÀô¹Ò) |
 
-ä»‹é¢ = è–„ adapter,é›¶æ¥­å‹™é‚è¼¯ï¼›today/week/proj/todo/done/recall å·²å…±ç”¨ typed
-`core/tools/` èƒ½åŠ›å±¤ã€‚åŠŸèƒ½ï¼agentï¼interfaceï¼permissionï¼storage æ¬Šå¨çŸ©é™£è¦‹
-[docs/TOOLS.md](docs/TOOLS.md)ï¼Œä»‹é¢è¨­è¨ˆè¦‹ [INTERFACES.md](INTERFACES.md)ã€‚
+¤¶­± = Á¡ adapter,¹s·~°ÈÅŞ¿è¡Ftoday/week/proj/todo/done/recall ¤w¦@¥Î typed
+`core/tools/` ¯à¤O¼h¡C¥\¯à¡şagent¡şinterface¡şpermission¡şstorage Åv«Â¯x°}¨£
+[docs/TOOLS.md](docs/TOOLS.md)¡A¤¶­±³]­p¨£ [INTERFACES.md](INTERFACES.md)¡C
 
-## ä½¿ç”¨
+## ¨Ï¥Î
 
 ```bash
-# åˆå§‹åŒ–(idempotent)
+# ªì©l¤Æ(idempotent)
 python -m core.stm init
 
-# è¡Œç¨‹/å¾…è¾¦/å°ˆæ¡ˆ CRUD
-python -m core.stm schedule add "é–‹æœƒ" --start 2026-07-15T14:00 --remind 2026-07-15T13:30
+# ¦æµ{/«İ¿ì/±M®× CRUD
+python -m core.stm schedule add "¶}·|" --start 2026-07-15T14:00 --remind 2026-07-15T13:30
 python -m core.stm schedule list
-python -m core.stm tasks add "è²·è²“ç ‚" --due 2026-07-16T20:00
+python -m core.stm tasks add "¶R¿ß¬â" --due 2026-07-16T20:00
 python -m core.stm projects set my-agent --phase "part-004" --next "curator"
 
-# è‡ªç„¶èªè¨€(éœ€ LLM key)
-python -m core.agent "æ˜å¤©ä¸‹åˆå…©é»è·Ÿé˜¿æ˜é–‹æœƒ æå‰30åˆ†æé†’"   # é è¦½ â†’ y â†’ è½åœ°
+# ¦ÛµM»y¨¥(»İ LLM key)
+python -m core.agent "©ú¤Ñ¤U¤È¨âÂI¸òªü©ú¶}·| ´£«e30¤À´£¿ô"   # ¹wÄı ¡÷ y ¡÷ ¸¨¦a
 
-# æ’ç¨‹ job(Windows Task Scheduler / cron)
-python -m core.agent --job remind        # åˆ°æœŸæé†’(+ é †æƒé€¾æ™‚å¾…ç¢ºèª)
-python -m core.agent --job consolidate   # å¤œé–“è’¸é¤¾
+# ±Æµ{ job(Windows Task Scheduler / cron)
+python -m core.agent --job remind        # ¨ì´Á´£¿ô(+ ¶¶±½¹O®É«İ½T»{)
+python -m core.agent --job consolidate   # ©]¶¡»]ÃH
 
-# Discord bot(éœ€ token,è¦‹ä¸‹)
+# Discord bot(»İ token,¨£¤U)
 python -m channels.discord_bot
 ```
 
-### ç’°å¢ƒè®Šæ•¸
+### Àô¹ÒÅÜ¼Æ
 
-| è®Šæ•¸ | ç”¨é€” |
+| ÅÜ¼Æ | ¥Î³~ |
 |---|---|
-| `MY_AGENT_LLM_API_KEY` | LLM(OpenAI ç›¸å®¹:OpenAI / OpenRouter / Groq / Ollama) |
-| `MY_AGENT_LLM_BASE_URL` | é¸é…:é OpenAI å®˜æ–¹ç«¯é» |
-| `MY_AGENT_EMBED_BASE_URL` | é¸é…:embedding ç¨ç«‹ç«¯é» |
+| `MY_AGENT_LLM_API_KEY` | LLM(OpenAI ¬Û®e:OpenAI / OpenRouter / Groq / Ollama) |
+| `MY_AGENT_LLM_BASE_URL` | ¿ï°t:«D OpenAI ©x¤èºİÂI |
+| `MY_AGENT_EMBED_BASE_URL` | ¿ï°t:embedding ¿W¥ßºİÂI |
 | `MY_AGENT_DISCORD_TOKEN` | Discord bot token |
-| `MY_AGENT_DISCORD_ALLOWED_USER_ID` | Discord ç™½åå–®(é€—è™Ÿåˆ†éš”;ç©º = å…¨æ‹’) |
+| `MY_AGENT_DISCORD_ALLOWED_USER_ID` | Discord ¥Õ¦W³æ(³r¸¹¤À¹j;ªÅ = ¥ş©Ú) |
 
-è·¯å¾‘é›†ä¸­åœ¨ `config.py`(`DATA_DIR` ç­‰)â€”â€”æ›æ©Ÿå™¨/é· VPS åªæ”¹é€™å€‹æª”æ¡ˆã€‚
+¸ô®|¶°¤¤¦b `config.py`(`DATA_DIR` µ¥)¡X¡X´«¾÷¾¹/¾E VPS ¥u§ï³o­ÓÀÉ®×¡C
 
-## å¯é æ€§è¨­è¨ˆ
+## ¥i¾a©Ê³]­p
 
-| é¢¨éšª | æ©Ÿåˆ¶ |
+| ­·ÀI | ¾÷¨î |
 |---|---|
-| è¨˜æ†¶å¹»è¦º | æº¯æºç¡¬è¦å‰‡:æ¯ç­†è¨˜å¿…å¸¶ä¾†æº;recall æä¾›çš„éç©ºå¼•ç”¨é€ä¸€é©—è­‰çœŸå¯¦(å‡å¼•ç”¨æ•´ç­”ä¸Ÿæ£„);found å¿…é™„ â‰¥1 é©—è­‰éå¼•ç”¨,ç©ºå¼•ç”¨ä¸€å¾‹ not_found(ç¨‹å¼ç¡¬è¦å‰‡,ä¸ä¿¡ LLM è‡ªå ±);å¯å›æ°´è®€åŸæ–‡ |
-| LLM æ±ºç­–æ±¡æŸ“ | æ¯å€‹è’¸é¤¾æ±ºç­–éæ¬„ä½ç´šé©—è­‰(ä¸å¾—è™›æ§‹ source_ids);ä¸åˆæ ¼è·³éä¸¦è¨˜ log |
-| å­ agent äº‚å¯« | ææ¡ˆåˆ¶ + å–®ä¸€ writer + å±éšªé–˜é–€;ç¢ºèªé€¾æ™‚ fail-closed |
-| è³‡æ–™éºå¤± | åŸæ–‡ append-only æ°¸ä¸åˆª;è’¸é¤¾å¤±æ•—äº‹ä»¶ç•™åœ¨åƒåœ¾æ¡¶ä¸‹è¼ªé‡è©¦;ç´¢å¼•å¯é‡å»º |
-| éœé»˜å£æ‰ | `agent_runs` è¨˜éŒ„æ¯æ¬¡åŸ·è¡Œ status;é ‚å±¤é˜²ç·šä¿è­‰ run ä¸å¡ running |
+| °O¾Ğ¤ÛÄ± | ·¹·½µw³W«h:¨Cµ§°O¥²±a¨Ó·½;recall ´£¨Ñªº«DªÅ¤Ş¥Î³v¤@ÅçÃÒ¯u¹ê(°²¤Ş¥Î¾ãµª¥á±ó);found ¥²ªş ?1 ÅçÃÒ¹L¤Ş¥Î,ªÅ¤Ş¥Î¤@«ß not_found(µ{¦¡µw³W«h,¤£«H LLM ¦Û³ø);¥i¦^¤ôÅª­ì¤å |
+| LLM ¨Mµ¦¦Ã¬V | ¨C­Ó»]ÃH¨Mµ¦¹LÄæ¦ì¯ÅÅçÃÒ(¤£±oµêºc source_ids);¤£¦X®æ¸õ¹L¨Ã°O log |
+| ¤l agent ¶Ã¼g | ´£®×¨î + ³æ¤@ writer + ¦MÀI¹hªù;½T»{¹O®É fail-closed |
+| ¸ê®Æ¿ò¥¢ | ­ì¤å append-only ¥Ã¤£§R;»]ÃH¥¢±Ñ¨Æ¥ó¯d¦b©U§£±í¤U½ü­«¸Õ;¯Á¤Ş¥i­««Ø |
+| ÀRÀqÃa±¼ | `agent_runs` °O¿ı¨C¦¸°õ¦æ status;³»¼h¨¾½u«OÃÒ run ¤£¥d running |
 
-## é–‹ç™¼
+## ¶}µo
 
 ```bash
-python -m pytest tests/ -q     # 630 tests
+python -m pytest tests/ -q     # 778 tests
 ```
 
-å·¥ä½œæµ:[Beacon](.beacon/PLAN.md)(plan â†’ design â†’ slice â†’ execute â†’ verify â†’
-**adversarial audit** â†’ archive)ã€‚æ¯å€‹ slice æ­¸æª”å¾Œè·‘å¯¦è­‰ç¨½æ ¸(æ¢é‡è…³æœ¬çœŸåŸ·è¡Œ
-å¯ç–‘è·¯å¾‘),ç™¼ç¾å…¨è¨˜éŒ„åœ¨ [KNOWN_ISSUES.md](KNOWN_ISSUES.md) ä¸¦è½‰ regression testã€‚
+¤u§@¬y:[Beacon](.beacon/PLAN.md)(plan ¡÷ design ¡÷ slice ¡÷ execute ¡÷ verify ¡÷
+**adversarial audit** ¡÷ archive)¡C¨C­Ó slice ÂkÀÉ«á¶]¹êÃÒ½]®Ö(±´°w¸}¥»¯u°õ¦æ
+¥iºÃ¸ô®|),µo²{¥ş°O¿ı¦b [KNOWN_ISSUES.md](KNOWN_ISSUES.md) ¨ÃÂà regression test¡C
 
-| æ–‡ä»¶ | å…§å®¹ |
+| ¤å¥ó | ¤º®e |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | ç³»çµ±è¨­è¨ˆæ¬Šå¨(schemaã€æµç¨‹åœ–ã€è¨­è¨ˆä¾æ“š) |
-| [INTERFACES.md](INTERFACES.md) | ä»‹é¢å±¤è¨­è¨ˆ(CLI/Discord/å„€è¡¨æ¿/MCP) |
-| [docs/TOOLS.md](docs/TOOLS.md) | èƒ½åŠ›å·¥å…·ã€agentã€ä»‹é¢ã€æ¬Šé™èˆ‡å„²å­˜é…å°çŸ©é™£ |
-| [docs/MEMORY-zh.md](docs/MEMORY-zh.md) | è¨˜æ†¶ç³»çµ±å¯¦ä½œè¦æ ¼(APIã€ä¸è®Šé‡ã€æ•…éšœæ¢å¾©) |
-| [KNOWN_ISSUES.md](KNOWN_ISSUES.md) | ç¨½æ ¸ç™¼ç¾èˆ‡ä¿®å¾©è¨˜éŒ„ |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | ¨t²Î³]­pÅv«Â(schema¡B¬yµ{¹Ï¡B³]­p¨Ì¾Ú) |
+| [INTERFACES.md](INTERFACES.md) | ¤¶­±¼h³]­p(CLI/Discord/»öªíªO/MCP) |
+| [docs/TOOLS.md](docs/TOOLS.md) | ¯à¤O¤u¨ã¡Bagent¡B¤¶­±¡BÅv­­»PÀx¦s°t¹ï¯x°} |
+| [docs/MEMORY-zh.md](docs/MEMORY-zh.md) | °O¾Ğ¨t²Î¹ê§@³W®æ(API¡B¤£ÅÜ¶q¡B¬G»Ù«ì´_) |
+| [KNOWN_ISSUES.md](KNOWN_ISSUES.md) | ½]®Öµo²{»P­×´_°O¿ı |
 
-## é€²åº¦
+## ¶i«×
 
-- âœ… part-001 åŸºç¤å±¤(schema + CRUD CLI)
-- âœ… part-002 Orchestrator + writer + schedule agent + remind
-- âœ… part-002.5 Discord bot(å…©éšæ®µç¢ºèª + DM æ¨æ’­)
-- âœ… part-003 è¨˜æ†¶æ ¸å¿ƒ(å†·å„²å­˜/ä»£è¬/è’¸é¤¾/æª¢ç´¢)
-- âœ… part-003.1 è¨˜æ†¶æ¶æ§‹é›™èªå¥‘ç´„(MEM-01..17 + A/B/C/D è©•ä¼°æ¡†æ¶)
-- âœ… part-003.2 Task Capsule A/B å¯¦é©—(éš”é›¢åŸå‹;åˆ¤å®š retain_a,æœªæ”¹æ­£å¼ schema)
-- âœ… part-003.5 å”¯è®€å„€è¡¨æ¿(stdlib http.server;127.0.0.1:7777;ä¸‰å±¤å”¯è®€)
-- âœ… part-004 sync skills(threads runner + curator + recall)
-- âœ… part-004.5 è¨˜æ†¶å¼·åŒ–(ä¸»é¡Œ trace / supersede / RRF èåˆ)
-- âœ… part-005 coding_tracker(git + beacon + opencode ä¸‰æº,çœŸä¸‰æº gate é€šé)
-- âœ… part-006 MCP server(èƒ½åŠ›å·¥å…·åŸºåº§/äº’å‹•ç¡¬åŒ–/stdio/Tailscale HTTP;630 tests)
-- ğŸ”¨ x/fb-sync phase-0 probe å®Œæˆ(playwright GraphQL æ””æˆª + transform/store + tests)
-- ğŸ“ part-007 Personal Model / part-008 Knowledge Scout / part-009 Proactive
-  Advisor / part-010 crowd-scenario â†’ å·²è¨­è¨ˆå¾… promote
-- ğŸ“‹ å¾…ä½¿ç”¨è€…ç’°å¢ƒ:å››æ‰¹çœŸ QA(LLM key / Discord token / threads session)+
-  part-006 VPS + Tailscale çœŸæ©Ÿ QA(backlog-008)
+- ? part-001 °òÂ¦¼h(schema + CRUD CLI)
+- ? part-002 Orchestrator + writer + schedule agent + remind
+- ? part-002.5 Discord bot(¨â¶¥¬q½T»{ + DM ±À¼½)
+- ? part-003 °O¾Ğ®Ö¤ß(§NÀx¦s/¥NÁÂ/»]ÃH/ÀË¯Á)
+- ? part-003.1 °O¾Ğ¬[ºcÂù»y«´¬ù(MEM-01..17 + A/B/C/D µû¦ô®Ø¬[)
+- ? part-003.2 Task Capsule A/B ¹êÅç(¹jÂ÷­ì«¬;§P©w retain_a,¥¼§ï¥¿¦¡ schema)
+- ? part-003.5 °ßÅª»öªíªO(stdlib http.server;127.0.0.1:7777;¤T¼h°ßÅª)
+- ? part-004 sync skills(threads runner + curator + recall)
+- ? part-004.5 °O¾Ğ±j¤Æ(¥DÃD trace / supersede / RRF ¿Ä¦X)
+- ? part-005 coding_tracker(git + beacon + opencode ¤T·½,¯u¤T·½ gate ³q¹L)
+- ? part-006 MCP server(¯à¤O¤u¨ã°ò®y/¤¬°Êµw¤Æ/stdio/Tailscale HTTP)
+- ? **part-007 Personal Model**(ÃÒ¾ÚÅX°Ê profile_facets;pin/forget µwÂĞ»\;
+  supersede Âù°¼«O¯d;§ë¼v vault + recall ¥i¨£)
+- ? **part-009 Proactive Advisor**(world-diff quiet-tick ¹s LLM;¥|­«¨¾¯h³Ò;
+  action ¨«½T»{;®Õ·Ç¦^õX¦¨ facet)
+- ? **part-008 Knowledge Scout**(allowlist fail-closed;external_untrusted ¹jÂ÷;
+  §ì¨ú¹s¼g¤J;`--job scout` Ä²µo¬ã¨s)
+- ?? x/fb-sync phase-0 probe §¹¦¨(playwright GraphQL ÄdºI + transform/store + tests)
+- ?? part-010 crowd-scenario ±¡¹Òºt½m ¡÷ ¤w³]­p«İ promote
+- ?? «İ¨Ï¥ÎªÌÀô¹Ò:¯uºô¸ô§ì¨ú / ¥|§å¯u QA(LLM key / Discord token / threads
+  session)+ part-006 VPS + Tailscale ¯u¾÷ QA(backlog-008)
 
-å‰èº«å°ˆæ¡ˆ:[threads-sync](https://github.com/Deo940712/threads-sync)(Threads
-å·²å­˜è²¼æ–‡ â†’ Obsidian,å·² vendored ç‚ºç¬¬ä¸€å€‹ sync skill)ã€‚
+**778 tests ºñ¡C¦Û¾AÀ³§U²z¼h(¡±15)¤T¶ô§¹¦¨:Personal Model + Advisor + Scout¡C**
+
+«e¨­±M®×:[threads-sync](https://github.com/Deo940712/threads-sync)(Threads
+¤w¦s¶K¤å ¡÷ Obsidian,¤w vendored ¬°²Ä¤@­Ó sync skill)¡C

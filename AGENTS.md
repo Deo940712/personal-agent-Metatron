@@ -179,6 +179,11 @@ UNCHANGED — refactoring stable APIs for cosmetics is not worth the churn.
 | **Raziel** | Consolidator (nightly distillation, MEM write side) | `agents/consolidator.md`, `--job consolidate` | "Book of Raziel" — writes cosmic knowledge into vault |
 | **Zerachiel** | Recall (RAG retrieval, MEM read side) | `agents/recall.md`, `role_type='agentic'` | Angel of memory / testimony — reads back what Raziel wrote |
 | **Uriel** | Coding tracker (project foresight) | `agents/coding_tracker.md`, `--job track` | "Light of God" — sees the whole picture, foretold the flood |
+| **Cassiel** | Proactive advisor (world-diff reflection, MEM 主動側) | `agents/advisor.md`, `--job advise` | Angel of solitude/temperance — quietly watches change, advises with restraint |
+
+Non-angel code-named agents: `advisor`/`facets` (Personal Model, part-007),
+`scout` (Knowledge Scout, part-008) — deterministic + LLM helpers, no angel display
+name required (identifiers stay technical).
 
 ### Reserved (mapped to backlog agents, docs-only until built)
 
@@ -196,8 +201,7 @@ Kept for future use; do NOT create agents for these without a real design need.
 | **Camael** | Red-team / adversarial tester | Adversarial audit currently runs as beacon slice gate, not a persistent agent |
 | **Raphael** | Debug / retry | Retry is currently a code-level top-level guard, not an agent |
 | **Ophanim** | Monitoring / log analysis | `agent_runs` table + planned dashboard cover this without an agent |
-| **Cassiel** | Cron / scheduling | Scheduling is a Windows Task Scheduler job (`--job remind`), not a subagent |
-| **Azrael** | Cleanup / GC / process termination | Metabolism/GC is a code-level cron in `core/metabolize.py`, not an agent |
+| **Azrael** | Cleanup / GC / process termination | Metabolism/GC is a code-level cron in `core/health.py`, not an agent |
 
 When any archived name gets promoted to active, move the row to the "Active"
 table above and add a real `agents/<name>.md` contract in the same commit.

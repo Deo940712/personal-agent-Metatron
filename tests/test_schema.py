@@ -20,6 +20,10 @@ EXPECTED_COLUMNS = {
                "created_at"},
     "pending_proposals": {"id", "proposal", "preview", "status", "channel_ref",
                           "created_at"},
+    "profile_facets": {"id", "facet_class", "facet_key", "value", "confidence",
+                       "stability", "evidence_count", "evidence_ids", "state",
+                       "user_state", "superseded_by", "first_seen_at",
+                       "last_seen_at", "created_at"},
 }
 
 
@@ -40,7 +44,7 @@ def columns(db, table):
 
 def test_all_tables_exist(db):
     assert stm.existing_tables(db) == sorted(stm.TABLES)
-    assert len(stm.TABLES) == 8                           # part-006-slice-002:+directives
+    assert len(stm.TABLES) == 9                           # part-007:+profile_facets
 
 
 @pytest.mark.parametrize("table", sorted(EXPECTED_COLUMNS))

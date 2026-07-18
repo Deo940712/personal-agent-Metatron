@@ -39,9 +39,14 @@ CREATE TABLE profile_facets (
   superseded_by  INTEGER,            -- 指向新 facet(矛盾修正,不刪舊)
   first_seen_at  INTEGER NOT NULL,
   last_seen_at   INTEGER NOT NULL,
-  created_at     INTEGER NOT NULL,
-  UNIQUE (facet_class, facet_key, state)   -- 同 class+key 只一個 active
+  created_at     INTEGER NOT NULL
 );
+-- 「同 class+key 只一個 active」用 partial unique index 實作(slice-000 修正:
+-- 原設計 UNIQUE(class,key,state) 會讓同 key 第二次 supersede 撞約束——
+-- 兩筆 superseded 同 key 是合法歷史,唯一性只該限制 active 列)
+CREATE UNIQUE INDEX idx_facets_unique_active
+  ON profile_facets(facet_class, facet_key)
+  WHERE state IN ('provisional','stable');
 CREATE INDEX idx_facets_active ON profile_facets(facet_class, state)
   WHERE state IN ('provisional','stable');
 ```

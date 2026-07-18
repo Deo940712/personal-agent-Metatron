@@ -114,6 +114,36 @@
         }
       }
     },
+    "part-007": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_facets.py tests/test_schema.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run `python -m core.stm init` on an existing 8-table DB and confirm profile_facets is added idempotently (no data loss, re-run is a no-op).",
+            "Run `python -m core.stm facets list` on an empty table and confirm it prints (empty) without error; insert one facet via test helper, pin it, forget it, and confirm state transitions via facets list --all."
+          ]
+        },
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_facets_writer.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-000"
+          ],
+          "manualQa": [
+            "Hand-build a profile_facet create proposal dict with a real transcript entry id, run writer.apply, and confirm `facets list` shows the provisional facet.",
+            "Repeat with a fabricated evidence id (e.g. evt:404) and confirm the proposal is rejected and an events row with action=proposal_rejected exists."
+          ]
+        }
+      }
+    },
     "part-006": {
       "slices": {
         "slice-000": {

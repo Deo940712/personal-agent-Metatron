@@ -44,3 +44,7 @@ CURATE_TAG_QUOTA = 20                          # 單次 curate 每 tag 進 regis
 EMBED_MODEL = "text-embedding-3-small"         # OpenAI 相容 /v1/embeddings
 EMBED_DIM = 1536
 EMBED_BASE_URL_ENV = "MY_AGENT_EMBED_BASE_URL" # 未設 = 同 LLM_BASE_URL
+
+# ── 個人模型 facets(part-007;初值保守,真實使用 1-2 月有數據再調) ────
+FACET_STABLE_MIN_EVIDENCE = 3                  # provisional → stable 最少證據次數
+FACET_STABLE_MIN_DAYS = 3                      # 證據須橫跨的最少天數(防單日洗量)

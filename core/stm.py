@@ -139,10 +139,40 @@ CREATE TABLE IF NOT EXISTS directives (
 );
 CREATE INDEX IF NOT EXISTS idx_directives_project_status
   ON directives(project, status);
+
+-- 個人模型 facets (part-007:證據驅動 stability;免疫衰減同 events immune 類)
+-- 生命週期:provisional → stable → superseded/forgotten;pinned/forgotten 是
+-- user_state 硬覆蓋(使用者永遠贏)。forgotten = 停用不刪;證據仍可回水。
+CREATE TABLE IF NOT EXISTS profile_facets (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  facet_class    TEXT    NOT NULL
+                 CHECK (facet_class IN ('preference','identity','routine',
+                                        'workflow','veto','goal','tooling','style')),
+  facet_key      TEXT    NOT NULL,   -- 類內唯一鍵,如 'work_hours' / 'reply_lang'
+  value          TEXT    NOT NULL,   -- 目前值(文字;結構化走 JSON)
+  confidence     REAL    NOT NULL DEFAULT 0.0,
+  stability      REAL    NOT NULL DEFAULT 0.0,
+  evidence_count INTEGER NOT NULL DEFAULT 0,
+  evidence_ids   TEXT,               -- JSON array:冷儲存 entry_id(溯源,可回水)
+  state          TEXT    NOT NULL DEFAULT 'provisional'
+                 CHECK (state IN ('provisional','stable','superseded','forgotten')),
+  user_state     TEXT    NOT NULL DEFAULT 'auto'
+                 CHECK (user_state IN ('auto','pinned','forgotten')),
+  superseded_by  INTEGER,            -- 指向新 facet(矛盾修正,不刪舊)
+  first_seen_at  INTEGER NOT NULL,
+  last_seen_at   INTEGER NOT NULL,
+  created_at     INTEGER NOT NULL
+);
+-- 同 class+key 只一個 active(partial unique:superseded/forgotten 歷史可多筆)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_facets_unique_active
+  ON profile_facets(facet_class, facet_key)
+  WHERE state IN ('provisional','stable');
+CREATE INDEX IF NOT EXISTS idx_facets_active ON profile_facets(facet_class, state)
+  WHERE state IN ('provisional','stable');
 """
 
 TABLES = ("schedule", "tasks", "projects", "cursors", "agent_runs", "events",
-          "pending_proposals", "directives")
+          "pending_proposals", "directives", "profile_facets")
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
@@ -570,6 +600,242 @@ def directive_cancel(db: Path | None, directive_id: int) -> bool:
         con.close()
 
 
+# ── profile_facets CRUD(part-007-slice-000:資料層)────────────────────
+# 寫入紀律:slice-000 只提供資料層原語;正式建立/升級/supersede 提案路徑在
+# slice-001 經 writer 欄位級驗證。pinned/forgotten 硬覆蓋在此層即擋(雙層防線)。
+
+FACET_CLASSES = ("preference", "identity", "routine", "workflow",
+                 "veto", "goal", "tooling", "style")
+_FACET_ACTIVE_STATES = ("provisional", "stable")
+
+
+def facet_get(db: Path | None, facet_id: int) -> dict | None:
+    con = connect(db)
+    try:
+        rows = _row_dicts(con.execute(
+            "SELECT * FROM profile_facets WHERE id = ?", (facet_id,)))
+        return rows[0] if rows else None
+    finally:
+        con.close()
+
+
+def facet_get_active(db: Path | None, facet_class: str, facet_key: str) -> dict | None:
+    """取同 class+key 的 active(provisional/stable)列;至多一筆(partial unique)。"""
+    con = connect(db)
+    try:
+        rows = _row_dicts(con.execute(
+            "SELECT * FROM profile_facets WHERE facet_class = ? AND facet_key = ? "
+            "AND state IN ('provisional','stable')",
+            (facet_class, facet_key)))
+        return rows[0] if rows else None
+    finally:
+        con.close()
+
+
+def facet_list(db: Path | None, *, facet_class: str | None = None,
+               include_inactive: bool = False) -> list[dict]:
+    """列 facets。預設只列 active(provisional/stable);include_inactive 含歷史。"""
+    con = connect(db)
+    try:
+        sql = "SELECT * FROM profile_facets"
+        clauses, vals = [], []
+        if not include_inactive:
+            clauses.append("state IN ('provisional','stable')")
+        if facet_class is not None:
+            clauses.append("facet_class = ?")
+            vals.append(facet_class)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY facet_class, facet_key, id"
+        return _row_dicts(con.execute(sql, vals))
+    finally:
+        con.close()
+
+
+def facet_insert(db: Path | None, facet_class: str, facet_key: str, value: str, *,
+                 confidence: float = 0.0, evidence_ids: list[str] | None = None,
+                 seen_at: int | None = None) -> int:
+    """建立 provisional facet(單次證據起點)。同 key 已有 active → IntegrityError。
+
+    fail-closed 驗證:class 合法、key/value 非空、confidence 界內。
+    """
+    if facet_class not in FACET_CLASSES:
+        raise ValueError(f"invalid facet_class: {facet_class!r}")
+    if not isinstance(facet_key, str) or not facet_key.strip():
+        raise ValueError("facet_key must be a non-empty string")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("facet value must be a non-empty string")
+    if not 0.0 <= confidence <= 1.0:
+        raise ValueError(f"confidence out of range: {confidence}")
+    ts = seen_at if seen_at is not None else now()
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "INSERT INTO profile_facets (facet_class, facet_key, value, confidence, "
+            "evidence_count, evidence_ids, first_seen_at, last_seen_at, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (facet_class, facet_key.strip(), value.strip(), confidence,
+             1 if evidence_ids else 0,
+             json.dumps(evidence_ids) if evidence_ids else None,
+             ts, ts, now()))
+        con.commit()
+        return cur.lastrowid
+    finally:
+        con.close()
+
+
+def facet_touch_evidence(db: Path | None, facet_id: int,
+                         evidence_ids: list[str], *,
+                         seen_at: int | None = None,
+                         confidence: float | None = None) -> bool:
+    """累積證據:append evidence_ids、evidence_count+1、更新 last_seen_at。
+
+    只作用於 active 列;superseded/forgotten 或 user_state='forgotten' → False
+    (forgotten ⇒ 阻止再升級的資料層防線)。不改 state——升級決策屬 detector
+    (core/facets.py)+ writer(slice-001)。
+    """
+    if not evidence_ids:
+        raise ValueError("evidence_ids must be non-empty")
+    con = connect(db)
+    try:
+        rows = _row_dicts(con.execute(
+            "SELECT * FROM profile_facets WHERE id = ?", (facet_id,)))
+        if not rows:
+            return False
+        row = rows[0]
+        if row["state"] not in _FACET_ACTIVE_STATES or row["user_state"] == "forgotten":
+            return False
+        merged = json.loads(row["evidence_ids"]) if row["evidence_ids"] else []
+        merged.extend(e for e in evidence_ids if e not in merged)
+        sets = ["evidence_count = evidence_count + 1", "evidence_ids = ?",
+                "last_seen_at = ?"]
+        vals: list = [json.dumps(merged), seen_at if seen_at is not None else now()]
+        if confidence is not None:
+            if not 0.0 <= confidence <= 1.0:
+                raise ValueError(f"confidence out of range: {confidence}")
+            sets.append("confidence = ?")
+            vals.append(confidence)
+        vals.append(facet_id)
+        cur = con.execute(
+            f"UPDATE profile_facets SET {', '.join(sets)} WHERE id = ?", vals)
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def facet_promote(db: Path | None, facet_id: int, stability: float) -> bool:
+    """provisional → stable(detector 判定通過後呼叫)。
+
+    只從 provisional 轉出;pinned 免動(已是使用者裁決,評分無效化)、
+    forgotten 擋死。stability 界內檢查。
+    """
+    if not 0.0 <= stability <= 1.0:
+        raise ValueError(f"stability out of range: {stability}")
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE profile_facets SET state = 'stable', stability = ? "
+            "WHERE id = ? AND state = 'provisional' AND user_state = 'auto'",
+            (stability, facet_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def facet_set_user_state(db: Path | None, facet_id: int, user_state: str) -> bool:
+    """使用者硬覆蓋:pin / forget / 回 auto。
+
+    pin ⇒ user_state='pinned' 且 provisional 直升 stable(使用者確認即穩定)。
+    forget ⇒ user_state='forgotten' 且 state='forgotten'(停用,不再載入;不刪)。
+    auto ⇒ 解除覆蓋(state 不回滾——forgotten 的 facet 需重新走建立路徑)。
+    """
+    if user_state not in ("auto", "pinned", "forgotten"):
+        raise ValueError(f"invalid user_state: {user_state!r}")
+    con = connect(db)
+    try:
+        if user_state == "pinned":
+            cur = con.execute(
+                "UPDATE profile_facets SET user_state = 'pinned', state = 'stable', "
+                "stability = 1.0 WHERE id = ? AND state IN ('provisional','stable')",
+                (facet_id,))
+        elif user_state == "forgotten":
+            cur = con.execute(
+                "UPDATE profile_facets SET user_state = 'forgotten', "
+                "state = 'forgotten' WHERE id = ? AND state != 'forgotten'",
+                (facet_id,))
+        else:
+            cur = con.execute(
+                "UPDATE profile_facets SET user_state = 'auto' WHERE id = ?",
+                (facet_id,))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def facet_supersede_mark(db: Path | None, old_id: int) -> bool:
+    """supersede 第一步:舊 facet → superseded(尚未指向新 facet)。
+
+    釋放 unique active 槽,讓同 class+key 的新值可插入;第二步用
+    facet_link_supersede 補 superseded_by。防線同 facet_supersede:
+    只從 active 轉出、pinned 擋死。
+    """
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE profile_facets SET state = 'superseded' "
+            "WHERE id = ? AND state IN ('provisional','stable') "
+            "AND user_state != 'pinned'",
+            (old_id,))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def facet_link_supersede(db: Path | None, old_id: int, new_id: int) -> bool:
+    """supersede 第二步:補上 superseded_by 指標(舊 → 新)。"""
+    if old_id == new_id:
+        raise ValueError("facet cannot supersede itself")
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE profile_facets SET superseded_by = ? "
+            "WHERE id = ? AND state = 'superseded'",
+            (new_id, old_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def facet_supersede(db: Path | None, old_id: int, new_id: int) -> bool:
+    """舊 facet → superseded 並指向新 facet。不刪舊(Mneme 雙側保留)。
+
+    防線:old 必須 active、不得 pinned(pinned 由使用者手動解除才可換)、
+    new 必須存在且 active、不得自我取代。
+    """
+    if old_id == new_id:
+        raise ValueError("facet cannot supersede itself")
+    con = connect(db)
+    try:
+        new_rows = _row_dicts(con.execute(
+            "SELECT id, state FROM profile_facets WHERE id = ?", (new_id,)))
+        if not new_rows or new_rows[0]["state"] not in _FACET_ACTIVE_STATES:
+            return False
+        cur = con.execute(
+            "UPDATE profile_facets SET state = 'superseded', superseded_by = ? "
+            "WHERE id = ? AND state IN ('provisional','stable') "
+            "AND user_state != 'pinned'",
+            (new_id, old_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
 # ── CLI ──────────────────────────────────────────────────────────────
 
 def _print_rows(rows: list[dict], cols: list[tuple[str, str]]) -> None:
@@ -627,6 +893,17 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--repo", dest="repo_path", default=None)
     sh = p_p.add_parser("show")
     sh.add_argument("name", nargs="?", default=None)
+
+    p_f = sub.add_parser("facets", help="個人模型 facets(part-007)").add_subparsers(
+        dest="verb", required=True)
+    fl = p_f.add_parser("list")
+    fl.add_argument("--class", dest="facet_class", default=None,
+                    choices=list(FACET_CLASSES))
+    fl.add_argument("--all", action="store_true", help="含 superseded/forgotten 歷史")
+    fp = p_f.add_parser("pin", help="使用者確認:直升 stable 且評分免動")
+    fp.add_argument("id", type=int)
+    ff = p_f.add_parser("forget", help="停用不刪;證據仍在,不再載入/升級")
+    ff.add_argument("id", type=int)
 
     p_d = sub.add_parser("directives", help="遠端下指令佇列").add_subparsers(
         dest="verb", required=True)
@@ -704,6 +981,26 @@ def _dispatch(args, db: Path | None) -> int:
             _print_rows(project_show(db, args.name),
                         [("name", "name"), ("phase", "phase"), ("blockers", "blockers"),
                          ("next_action", "next"), ("updated_at", "updated")])
+        return 0
+
+    if args.domain == "facets":
+        if args.verb == "list":
+            _print_rows(facet_list(db, facet_class=args.facet_class,
+                                   include_inactive=args.all),
+                        [("id", "#"), ("facet_class", "class"), ("facet_key", "key"),
+                         ("value", "value"), ("state", "state"),
+                         ("user_state", "user"), ("evidence_count", "evidence"),
+                         ("last_seen_at", "last_seen")])
+        elif args.verb == "pin":
+            ok = facet_set_user_state(db, args.id, "pinned")
+            print(f"OK: facet #{args.id} pinned" if ok
+                  else f"NOT ACTIVE: #{args.id}")
+            return 0 if ok else 1
+        elif args.verb == "forget":
+            ok = facet_set_user_state(db, args.id, "forgotten")
+            print(f"OK: facet #{args.id} forgotten" if ok
+                  else f"NOT FOUND / already forgotten: #{args.id}")
+            return 0 if ok else 1
         return 0
 
     if args.domain == "directives":

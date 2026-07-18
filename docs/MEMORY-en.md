@@ -23,7 +23,9 @@
 - `[IMPLEMENTED]` Every core invocation is independent. Continuity comes from
   authoritative stores, not an accumulated replay of an entire chat.
 - `[CANDIDATE]` Task Capsule, task-scoped warm set, and LLM-managed paging. The
-  A/B/C/D comparison is defined, but **multi-layer context is undecided**.
+  A/B/C/D comparison is defined; part-003.2 completed one isolated A/B experiment
+  round (verdict retain_a, 0/7 workloads qualified), but **multi-layer context is
+  undecided** — B is neither adopted nor permanently rejected.
 - `[NON-GOAL]` A resident conversation brain, automatic whole-chat replay without
   validation, physical deletion of raw evidence, or raw SQL/DB/file write primitives
   held by an LLM.
@@ -166,7 +168,7 @@ The first two are implemented; that does not imply adoption of the latter two.
 | Option | Status | Mechanism | Benefit | Risk |
 |---|---|---|---|---|
 | A Current | `[IMPLEMENTED]` | Stateless run, rebuild from authority, retrieve on demand | Simplest, replayable, small pollution surface | Long tasks may repeat reads or lose non-authoritative intermediate decisions |
-| B Task Capsule | `[CANDIDATE]` | A + goal/constraints/decisions/completed/open-loops/next-action/evidence refs | Clear cross-run resume | Schema, versioning, staleness, and conflict management |
+| B Task Capsule | `[CANDIDATE]` (one experiment round in part-003.2: retain_a) | A + goal/constraints/decisions/completed/open-loops/next-action/evidence refs | Clear cross-run resume | Schema, versioning, staleness, and conflict management |
 | C Controlled warm set | `[CANDIDATE]` | B + task-scoped cache loaded/evicted by deterministic assembly | Fewer repeated searches within one task | Cache invalidation, synchronization, observability cost |
 | D LLM-managed paging | `[CANDIDATE]` | C + LLM chooses STM↔MTM↔LPM movement | May help very long exploratory tasks | Extra rounds, latency, tokens, non-reproducibility, pollution, recovery complexity |
 
@@ -270,7 +272,7 @@ key. A stale patch must never silently overwrite a newer version.
 | `.idx` behind JSONL | `transcript.rebuild_idx` |
 | Distillation LLM failure | events stay in trash for retry |
 | Broken vault frontmatter | skip and log the note; do not crash the vault |
-| Duplicate pending confirmation | `[PLANNED]` atomic claim in part-006 slice-001; not claimed solved yet |
+| Duplicate pending confirmation | `[IMPLEMENTED]` part-006 slice-001: `stm.pending_claim` atomic claim (concurrent double-confirm lands once) |
 | UI session interruption | rebuild from DB1/Beacon/vault authority, not full-chat replay |
 
 ## 9. Probe-Verified Implementation Reference
@@ -307,6 +309,16 @@ cancelled then reopened task.
 Measure restoration of goal/constraints/next action, repeated searches, context tokens,
 LLM/tool calls, p50/p95 latency, stale-state load rate, rejected unproven promotions,
 concurrent conflicts, and rebuildability after failure.
+
+**First A/B experiment round completed (part-003.2, 2026-07-16)**: isolated SQLite
+prototype, the seven workloads above, preregistered thresholds, deterministic
+scoring → **verdict retain_a** (0/7 qualified; B, being safely stale-by-default,
+re-read authority anyway, saved no authority reads, and exceeded the p95 budget).
+Production schema/runtime unchanged. Report: `docs/ECC-TASK-CAPSULE-REPORT-zh.md`.
+Threats to validity (honestly noted in the report): no real LLM loop; costs were
+IO proxies. Any future B retest should measure the LLM's cognitive load to
+reconstruct task state (tokens/reasoning steps), not IO reads — this requires a
+real LLM loop (backlog-031).
 
 **MEM-17 — Problems trigger complexity.** Keep A if it has no reproducible failure.
 Stop at B if B solves the problem. Test C only when repeated retrieval or context pressure

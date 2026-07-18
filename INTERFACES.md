@@ -45,13 +45,13 @@ flowchart TD
     RJ["remind job"] -->|notify.send| DC
 ```
 
-目前介面先共用 `core/tools/` 的 `CapabilityContext` / `CapabilityResult`；Discord 的
-文字路由仍由 `core/chat.py` 轉成穩定 `Reply`。下一 slice 才把 CLI/Discord/MCP
-收斂到單一 invocation 結果:
+介面共用 `core/tools/` 的 `CapabilityContext` / `CapabilityResult`；CLI/Discord/MCP
+已收斂到單一 invocation 入口(part-006 slice-001 已實作):
 
 ```python
 def invoke(text: str, ctx: InvocationContext) -> InvocationResult: ...
-# part-006 slice-001 planned;不是 slice-000 已完成 API
+# core/application.py:路由(排程/問答/確認)→ 執行 → agent_runs 記錄
+# 確認走 stm.pending_claim 原子認領(併發雙確認只落地一次)
 ```
 
 Capability tool call 不必全部繞回 orchestrator：read/propose/架構明定的 auto-apply

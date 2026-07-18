@@ -111,10 +111,10 @@ plane，不是所有工具的同步 data-plane proxy。
 | **Sandalphon** — `schedule` | 自然語言 → 行程/待辦提案(「明天下午兩點開會提前30分提醒」);rrule 重複行程 | 使用者原句 + 現有行程 | `schedule_change` / `task_change` 提案 | ✅ |
 | **Raziel** — `consolidator` | 夜間蒸餾:到期事件 → 日誌摘要(episodic)/ 使用者偏好(agent/profile);每個決策過欄位級驗證,不得虛構來源 | 到期 events 批次 | 蒸餾組(kind/title/summary/tags/source_ids/confidence) | ✅ |
 | **Jophiel** — `curator` | 貼文評分(0-10 閘門 4.0)、分類、依日期去重、入 vault;manual_tags 永不覆蓋 | inbox 筆記批次 | `classify_note` 提案 | ✅ |
-| **Zerachiel** — `recall` | 知識庫問答:index→FTS→向量 RRF 融合 + rehydrate;非空引用逐一驗證真實性(假引用整答丟棄);superseded_by 提示。嚴格 found/not_found(有主張必附引用)為 part-006-slice-001 [PLANNED] | 查詢字串 | 帶引用的答案 | ✅ |
+| **Zerachiel** — `recall` | 知識庫問答:index→FTS→向量 RRF 融合 + rehydrate;非空引用逐一驗證真實性(假引用整答丟棄);superseded_by 提示;嚴格 found/not_found(found 必附 ≥1 驗證過引用,空引用一律 not_found,part-006 已實作) | 查詢字串 | 帶引用的答案 | ✅ |
 | **Uriel** — `coding_tracker` | vibe coding 進度:三源唯讀掃描(git + `.beacon/CURRENT` + OpenCode sessions,beacon 最高權威)→ 每專案 phase/blockers/next | 已註冊專案 | `project_update` 提案 | ✅ |
 | **Anael** — `librarian` | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延維護;兩階段、快照可回滾、永不刪除 | vault.scan 確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 backlog-017 |
-| sync-{threads,x,fb} | 平台抓取管線(**非 LLM**,純 CLI,idempotent 可續傳) | cursor | new_count, status | threads ✅ / x,fb 📋 |
+| sync-{threads,x,fb} | 平台抓取管線(**非 LLM**,純 CLI,idempotent 可續傳) | cursor | new_count, status | threads ✅ / x,fb 🔨 phase-0 probe 完成 |
 
 > Michael / Camael / Raphael / Ophanim / Cassiel / Azrael 是使用者提名但**目前無對應 agent** 的天使名,
 > 已在 [AGENTS.md](AGENTS.md) §Angel naming registry 「Archived」段封存。日後若真的獨立成 agent 才啟用,不預先佔位。
@@ -131,8 +131,8 @@ scope/budget/timeout 控制；shared-state commit 仍只有 deterministic writer
 | **CLI** | 開發、排程 job | 讀+寫 | ✅ |
 | **Obsidian** | 知識庫閱讀/編輯(vault 就是 UI) | 讀+寫 | ✅(零成本) |
 | **Discord bot** | 出門:排事情(預覽→✅按鈕→落地)+ 提醒 DM 推播;私人 server 鎖 user id | 讀+寫(走 writer+確認) | ✅ 程式面 |
-| 網頁儀表板 | 在家總覽 + 系統健康(127.0.0.1 唯讀) | 唯讀 | 📋 part-003.5 |
-| MCP server | 在 OpenCode/Claude Code 內直接問助理 | 唯讀優先 | 📋 part-006 |
+| 網頁儀表板 | 在家總覽 + 系統健康(127.0.0.1:7777;GET-only + mode=ro 三層唯讀) | 唯讀 | ✅ |
+| MCP server(stdio + Tailscale HTTP) | 在 OpenCode/Claude Code 內問助理/排程/遠端開發迴圈 | 讀+寫(寫走 pending 確認) | ✅ 程式面(VPS 真機 QA 待環境) |
 
 介面 = 薄 adapter,零業務邏輯；today/week/proj/todo/done/recall 已共用 typed
 `core/tools/` 能力層。功能／agent／interface／permission／storage 權威矩陣見
@@ -177,7 +177,7 @@ python -m channels.discord_bot
 
 | 風險 | 機制 |
 |---|---|
-| 記憶幻覺 | 溯源硬規則:每筆記必帶來源;recall 提供的非空引用逐一驗證真實(假引用整答丟棄);可回水讀原文。強制「有主張必附引用」的 found/not_found 契約為 [PLANNED] |
+| 記憶幻覺 | 溯源硬規則:每筆記必帶來源;recall 提供的非空引用逐一驗證真實(假引用整答丟棄);found 必附 ≥1 驗證過引用,空引用一律 not_found(程式硬規則,不信 LLM 自報);可回水讀原文 |
 | LLM 決策污染 | 每個蒸餾決策過欄位級驗證(不得虛構 source_ids);不合格跳過並記 log |
 | 子 agent 亂寫 | 提案制 + 單一 writer + 危險閘門;確認逾時 fail-closed |
 | 資料遺失 | 原文 append-only 永不刪;蒸餾失敗事件留在垃圾桶下輪重試;索引可重建 |
@@ -186,7 +186,7 @@ python -m channels.discord_bot
 ## 開發
 
 ```bash
-python -m pytest tests/ -q     # 326 tests
+python -m pytest tests/ -q     # 630 tests
 ```
 
 工作流:[Beacon](.beacon/PLAN.md)(plan → design → slice → execute → verify →
@@ -207,12 +207,18 @@ python -m pytest tests/ -q     # 326 tests
 - ✅ part-002 Orchestrator + writer + schedule agent + remind
 - ✅ part-002.5 Discord bot(兩階段確認 + DM 推播)
 - ✅ part-003 記憶核心(冷儲存/代謝/蒸餾/檢索)
+- ✅ part-003.1 記憶架構雙語契約(MEM-01..17 + A/B/C/D 評估框架)
+- ✅ part-003.2 Task Capsule A/B 實驗(隔離原型;判定 retain_a,未改正式 schema)
+- ✅ part-003.5 唯讀儀表板(stdlib http.server;127.0.0.1:7777;三層唯讀)
 - ✅ part-004 sync skills(threads runner + curator + recall)
 - ✅ part-004.5 記憶強化(主題 trace / supersede / RRF 融合)
 - ✅ part-005 coding_tracker(git + beacon + opencode 三源,真三源 gate 通過)
-- 📋 part-006 stdio MCP(遠端開發迴圈:dev_status/directives 佇列)→ 已設計
-- 📋 part-003.5 唯讀儀表板 → 已設計(排 part-006 slice-1 後)
-- 📋 待使用者環境:四批真 QA(LLM key / Discord token / threads session)
+- ✅ part-006 MCP server(能力工具基座/互動硬化/stdio/Tailscale HTTP;630 tests)
+- 🔨 x/fb-sync phase-0 probe 完成(playwright GraphQL 攔截 + transform/store + tests)
+- 📐 part-007 Personal Model / part-008 Knowledge Scout / part-009 Proactive
+  Advisor / part-010 crowd-scenario → 已設計待 promote
+- 📋 待使用者環境:四批真 QA(LLM key / Discord token / threads session)+
+  part-006 VPS + Tailscale 真機 QA(backlog-008)
 
 前身專案:[threads-sync](https://github.com/Deo940712/threads-sync)(Threads
 已存貼文 → Obsidian,已 vendored 為第一個 sync skill)。

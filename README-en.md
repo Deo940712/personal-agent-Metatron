@@ -125,10 +125,10 @@ Full registry in [AGENTS.md](AGENTS.md) §Angel naming registry.
 | **Sandalphon** — `schedule` | Natural language → schedule/todo proposals ("meeting tomorrow 2pm, remind me 30 min before"); rrule recurrence | User utterance + active items | `schedule_change` / `task_change` proposal | ✅ |
 | **Raziel** — `consolidator` | Nightly distillation: expired events → daily-log summaries (episodic) / user preferences (agent/profile); every decision passes field-level validation, sources must not be fabricated | Batch of due events | Distill groups (kind/title/summary/tags/source_ids/confidence) | ✅ |
 | **Jophiel** — `curator` | Post scoring (0-10 gate), classification, cross-source dedup, vault intake, linking; Chinese FIRE card-splitting | Inbox note batch | `classify_note` proposal | ✅ |
-| **Zerachiel** — `recall` | Knowledge-base Q&A: RRF cascade (index → FTS → vector) + rehydrate; non-empty citations are each verified against the registry (bogus citation drops the whole answer); superseded_by hints. The strict found/not_found contract (a claim must carry a citation) is part-006-slice-001 [PLANNED] | Query string | Cited answer | ✅ |
+| **Zerachiel** — `recall` | Knowledge-base Q&A: RRF fusion (index → FTS → vector) + rehydrate; non-empty citations are each verified against the registry (bogus citation drops the whole answer); superseded_by hints; strict found/not_found contract (found requires ≥1 verified citation; empty citations force not_found — enforced in code since part-006) | Query string | Cited answer | ✅ |
 | **Uriel** — `coding_tracker` | Vibe-coding progress from three read-only signals (git log + `.beacon/CURRENT.md` + OpenCode sessions, beacon = highest authority) → per-project phase/blockers/next | Registered project list | `project_update` proposal | ✅ |
 | **Anael** — `librarian` | Vault caretaker: orphans / broken links / duplicates / tag sprawl / INDEX drift; two-phase (deterministic scan + opt-in LLM consolidation), snapshot-rollback, never deletes | Deterministic vault.scan report | `vault_maintenance` proposal (dry-run first) | 📋 backlog-017 |
-| sync-{threads,x,fb} | Platform capture pipelines (**non-LLM**, pure CLI: Capture→State→Transform→Output, idempotent, resumable) | cursor | new_count, status | threads ✅ / x,fb 📋 |
+| sync-{threads,x,fb} | Platform capture pipelines (**non-LLM**, pure CLI: Capture→State→Transform→Output, idempotent, resumable) | cursor | new_count, status | threads ✅ / x,fb 🔨 phase-0 probes done |
 
 Two subagent types: **pure-function** (single LLM call, no tools, replayable —
 Sandalphon/Raziel/Jophiel/Anael/Uriel) and **agentic** (currently Zerachiel uses an
@@ -149,8 +149,8 @@ state still has one deterministic writer commit boundary.
 | **CLI** | Development, scheduled jobs | R+W | ✅ |
 | **Obsidian** | Knowledge reading/editing (the vault is the UI) | R+W | ✅ (free) |
 | **Discord bot** | On the go: scheduling (preview → ✅ button → land) + reminder DM push; private server, user-id whitelist | R+W (via writer + confirm) | ✅ code-complete |
-| Web dashboard | At-home overview + system health (127.0.0.1, read-only) | RO | 📋 part-003.5 |
-| MCP server | Query the assistant from inside OpenCode/Claude Code | RO-first | 📋 part-006 |
+| Web dashboard | At-home overview + system health (127.0.0.1:7777; GET-only + mode=ro, triple read-only guarantee) | RO | ✅ |
+| MCP server (stdio + Tailscale HTTP) | Query/schedule/remote dev-loop from inside OpenCode/Claude Code | R+W (writes go through pending confirm) | ✅ code-complete (VPS QA pending environment) |
 
 Interfaces are thin adapters with zero business logic. The today/week/project/
 todo/done/recall paths now share the typed `core/tools/` capability layer. See
@@ -197,7 +197,7 @@ VPS means editing one file.
 
 | Risk | Mechanism |
 |---|---|
-| Memory hallucination | Hard provenance rule: every note carries its source; recall verifies each non-empty citation against the registry (bogus citation drops the whole answer); raw text is rehydratable. Enforcing "a claim must carry a citation" is [PLANNED] |
+| Memory hallucination | Hard provenance rule: every note carries its source; recall verifies each non-empty citation against the registry (bogus citation drops the whole answer); found requires ≥1 verified citation and empty citations force not_found (enforced in code, not trusted to the LLM); raw text is rehydratable |
 | LLM decision pollution | Every distillation decision passes field-level validation (no fabricated source_ids); failures skipped and logged |
 | Rogue subagent writes | Proposal protocol + single writer + danger gates; confirmation timeout fail-closed |
 | Data loss | Raw text append-only, never deleted; failed distillations stay in trash for retry; index is rebuildable |
@@ -206,7 +206,7 @@ VPS means editing one file.
 ## Development
 
 ```bash
-python -m pytest tests/ -q     # 326 tests
+python -m pytest tests/ -q     # 630 tests
 ```
 
 Workflow: [Beacon](.beacon/PLAN.md) (plan → design → slice → execute → verify →
@@ -228,13 +228,17 @@ into a regression test.
 - ✅ part-001 Foundation (schema + CRUD CLI)
 - ✅ part-002 Orchestrator + writer + schedule agent + remind
 - ✅ part-002.5 Discord bot (two-stage confirmation + DM push)
-- ✅ part-003 Memory core (cold storage / metabolism / distillation / cascade retrieval)
+- ✅ part-003 Memory core (cold storage / metabolism / distillation / retrieval)
+- ✅ part-003.1 Bilingual memory contract (MEM-01..17 + A/B/C/D evaluation framework)
+- ✅ part-003.2 Task Capsule A/B experiment (isolated prototype; verdict retain_a, production schema untouched)
+- ✅ part-003.5 Read-only dashboard (stdlib http.server; 127.0.0.1:7777; triple read-only)
 - ✅ part-004 Sync skills (threads runner + curator + recall)
 - ✅ part-004.5 Memory upgrades (topic traces / supersede / RRF fusion)
 - ✅ part-005 coding_tracker (git + beacon + opencode signals, live gate passed)
-- 📋 part-006 stdio MCP (remote dev-loop: dev_status/directives queue) — designed
-- 📋 part-003.5 read-only dashboard — designed (after part-006 slice-1)
-- 📋 Pending user env: four real-QA batches (LLM key / Discord token / threads session)
+- ✅ part-006 MCP server (capability tool base / interaction hardening / stdio / Tailscale HTTP; 630 tests)
+- 🔨 x/fb-sync phase-0 probes done (playwright GraphQL capture + transform/store + tests)
+- 📐 part-007 Personal Model / part-008 Knowledge Scout / part-009 Proactive Advisor / part-010 crowd-scenario — designed, awaiting promote
+- 📋 Pending user env: four real-QA batches (LLM key / Discord token / threads session) + part-006 VPS + Tailscale live QA (backlog-008)
 
 Predecessor project: [threads-sync](https://github.com/Deo940712/threads-sync)
 (saved Threads posts → Obsidian; this project reuses its pipeline patterns and will

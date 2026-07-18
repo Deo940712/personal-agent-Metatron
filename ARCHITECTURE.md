@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph STORAGE["儲存層"]
-        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>七張表（directives 為 part-006 [PLANNED]）")]
+        DB1[("DB1 state.db<br/>SQLite = System of Record<br/>八張表（含 directives，part-006 已實作）")]
         DB2[("DB2 Obsidian vault<br/>Markdown 知識介面<br/>semantic/ + episodic/ + agent/")]
         COLD[("冷儲存 transcript<br/>append-only JSONL + .idx<br/>永不刪")]
         VEC[("向量索引<br/>衍生物,可重建")]
@@ -82,6 +82,28 @@ flowchart TD
 
 ## 3. 多 Agent 拓撲(Orchestrator + 無狀態子 Agent)
 
+### 3.0 分工總覽(誰負責什麼——三方分工鐵律)
+
+整個系統的分工只有三方,每一方的職責邊界是硬規則:
+
+| 方 | 負責 | 永不負責 |
+|---|---|---|
+| **LLM**(orchestrator 路由 + 子 agent) | 自然語言理解、分類、評分、摘要、蒸餾決策、衝突解釋、綜合建議 | 時區轉換、rrule 展開、到期判斷、去重、寫入落地、驗證、排程觸發 |
+| **確定性程式**(writer/jobs/skills/scanners) | 驗證(欄位級)、寫入 commit、提醒觸發、健康值代謝、idempotent 抓取、三源掃描、索引重建 | 語意判斷(它不猜,只驗證) |
+| **使用者** | 高風險操作確認(preview→✅)、pin/forget 硬覆蓋、SOP 顯式保存、開 opt-in 功能 | ——(逾時未確認 = 拒絕,fail-closed) |
+
+分層再細一層,control/policy/data 三平面(詳見 [docs/TOOLS.md](docs/TOOLS.md)):
+
+```text
+Metatron/orchestrator  = control plane:路由、派工、跨 agent 衝突、最終整合
+Capability gateway     = policy plane:allowlist、scope、budget、timeout、audit
+Deterministic writer   = data plane:validate → confirm → commit(唯一寫入邊界)
+```
+
+推論鏈:LLM 可以呼叫工具 ≠ LLM 有寫入權;agent 產生提案 ≠ agent 自己落地;
+介面能觸發能力 ≠ 介面繞過確認。三個授權欄位(agent allowlist / interface
+exposure / permission)獨立管理,交集才是實際可執行面。
+
 2026 三大框架(LangGraph supervisor、Claude Agent SDK subagents、OpenAI Agents SDK triage)收斂的生產標準:**一個 agent 持有全局視野,子 agent 做 scoped 工作後回傳結構化摘要即消失**。
 
 子 agent 契約(Clean Summary Discipline):
@@ -97,11 +119,11 @@ flowchart TD
 |---|---|---|---|---|
 | schedule | 行程/待辦/提醒解析(rrule 重複、remind 預設 30 分) | 使用者原句 + 現有項目 | `schedule_change`/`task_change` 提案 | ✅ |
 | consolidator | 夜間蒸餾:到期 events → episodic 日誌 / preference 偏好;五條欄位級驗證 | 到期 events 批次(按天分組) | 蒸餾組(kind/title/summary/tags/source_ids/confidence) | ✅ |
-| curator | 貼文評分(0-10 閘門)、分類、去重、入 vault、建連結 | inbox 筆記路徑批次 | `classify_note` 提案 | 📋 part-004 |
-| librarian | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延/INDEX 漂移/stale 維護(§4.3) | 維護掃描器的確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 part-004+ |
-| coding_tracker | 三源進度綜合(git + beacon + opencode) | 專案路徑清單 | `project_update` 提案 | 📋 part-005 |
-| sync-{threads,x,fb} | 平台抓取管線(非 LLM,純 CLI;threads 經 skills/runner) | cursor | new_count, status | threads ✅ / x,fb 📋 |
-| recall | 四段級聯檢索答問(index→FTS→向量→rehydrate) | 查詢字串 | 引用來源的答案(≤500 字) | 📋 part-004 |
+| curator | 貼文評分(0-10 閘門)、分類、去重、入 vault、建連結 | inbox 筆記路徑批次 | `classify_note` 提案 | ✅ part-004 |
+| librarian | vault 圖書管理員:孤兒/斷鏈/重複/tag 蔓延/INDEX 漂移/stale 維護(§4.3) | 維護掃描器的確定性報告 | `vault_maintenance` 提案(dry-run 先行) | 📋 backlog-017 |
+| coding_tracker | 三源進度綜合(git + beacon + opencode) | 專案路徑清單 | `project_update` 提案 | ✅ part-005 |
+| sync-{threads,x,fb} | 平台抓取管線(非 LLM,純 CLI;threads 經 skills/runner) | cursor | new_count, status | threads ✅ / x,fb 🔨 phase-0 probe 完成 |
+| recall | RRF 融合檢索答問(index/FTS/向量融合 + rehydrate;found 必附驗證過的引用) | 查詢字串 | 引用來源的答案(≤500 字) | ✅ part-004(引用硬規則 part-006 強化) |
 
 ### 3.1 提案(Proposal)格式
 
@@ -215,31 +237,34 @@ flowchart LR
 
 介面層有獨立設計文件:**[INTERFACES.md](INTERFACES.md)**(設計權威)。摘要:
 
-| 介面 | 場景 | 讀/寫 | 時程 |
+| 介面 | 場景 | 讀/寫 | 狀態 |
 |---|---|---|---|
-| CLI | 開發、排程 job | 讀+寫 | Phase 1-2 |
-| Obsidian | 知識庫閱讀/編輯 | 讀+寫(vault) | 零成本 |
-| Discord bot(私人 server,鎖 user ID) | 出門:提醒推播 + 排事情 | 讀+寫(走 writer+確認) | Phase 2.5 |
-| 網頁儀表板(FastAPI+htmx,127.0.0.1) | 在家:總覽 + 系統健康 | **唯讀**(`mode=ro`) | Phase 3.5 |
-| MCP server | OpenCode 內查詢 | 唯讀優先 | Phase 6 |
+| CLI | 開發、排程 job | 讀+寫 | ✅ |
+| Obsidian | 知識庫閱讀/編輯 | 讀+寫(vault) | ✅ 零成本 |
+| Discord bot(私人 server,鎖 user ID) | 出門:提醒推播 + 排事情 | 讀+寫(走 writer+確認) | ✅ 程式面 |
+| 網頁儀表板(stdlib http.server,127.0.0.1:7777) | 在家:總覽 + 系統健康 | **唯讀**(GET-only + `mode=ro` + 零寫入呼叫) | ✅ |
+| MCP server(stdio + Tailscale HTTP) | OpenCode 內查詢/排程/遠端開發迴圈 | 讀+寫(寫走 pending 確認) | ✅ 程式面 |
 
-鐵律:channel = 薄 adapter 零業務邏輯，先共用 `core/tools/` 能力層；統一
-`application.invoke` 是 part-006 slice-001 的下一步。寫入不因來源開後門；
-**提醒通知管道 = Discord DM(開放決策已解)**。
+鐵律:channel = 薄 adapter 零業務邏輯，共用 `core/tools/` 能力層；統一入口
+`core/application.py:invoke()` 已實作(part-006 slice-001)——CLI/Discord/MCP 同一
+invocation 流程、同一 `InvocationResult`、同一 `pending_claim` 原子確認。寫入不因
+來源開後門;**提醒通知管道 = Discord DM(開放決策已解)**。
 
 ### 3.5 MCP 規劃
 
 | 方向 | 決定 | 說明 |
 |---|---|---|
-| **對外暴露(server)** | Phase 6(backlog) | 把 `recall_query` / `schedule_list` / `project_status` 包成 MCP server(借鑑 Horizon 的 MCP 模式)。屆時你在 OpenCode / Claude Code 任何 session 裡都能直接問自己的助理(「我存過哪些 RAG 貼文?」「今天行程?」),不用切視窗 |
+| **對外暴露(server)** | ✅ part-006 已實作 | 10 個 MCP 工具:`schedule_list`/`schedule_add`/`task_list`/`task_add`/`confirm`/`project_status`/`dev_status`/`session_tail`/`directive_list`/`directive_push`。在 OpenCode / Claude Code 任何 session 裡直接問自己的助理,不用切視窗 |
 | **對內消費(client)** | 不做 | skills 是純 CLI 管線,不需要 MCP client;避免多一層依賴 |
 | **Claude skills** | 不衝突 | `agents/*.md` 是本專案自己的 prompt 契約;若之後想讓 Claude Code 直接操作 vault,可另寫 SKILL.md(參考 DesktopCommanderMCP 的 knowledge-base skill),與本系統互不干擾 |
 
-MCP server **一套工具、兩種傳輸**(part-006 定案):`core/mcp/tools.py` 工具定義
+MCP server **一套工具、兩種傳輸**(part-006 已實作):`core/mcp/tools.py` 工具定義
 與傳輸分離,共用兩個薄 adapter——
-- **slice-1 本機 stdio**:OpenCode 直接 spawn Python 進程,零網路(現可做)
-- **slice-2 遠程 HTTP/SSE**:VPS 常駐,綁 **Tailscale IP**(WireGuard 私有網路,
-  不上公網 → 零認證複雜度、零攻擊面;綁公網 IP 啟動即拒絕,fail-closed)
+- **本機 stdio**(`channels/mcp_stdio.py` ✅):OpenCode 直接 spawn Python 進程,零網路
+- **遠程 HTTP JSON-RPC**(`channels/mcp_http.py` ✅):VPS 常駐,bind guard
+  fail-closed——只允 loopback / RFC1918 私網 / **Tailscale**(100.64.0.0/10 CGNAT;
+  WireGuard 私有網路,不上公網 → 零認證複雜度、零攻擊面);綁公網 IP 或 0.0.0.0
+  啟動即拒絕。VPS + Tailscale 真機 QA 待環境(backlog-008 checklist)
 
 讀寫皆可:查詢類免確認;寫入類(`schedule_add`)復用 chat.py 兩階段——回 pending +
 預覽,使用者在任一介面確認(pending 是 DB1 共用,跨介面天然一致)。**寫入不因
@@ -248,9 +273,10 @@ MCP server **一套工具、兩種傳輸**(part-006 定案):`core/mcp/tools.py` 
 
 ## 4. 記憶模型：已實作儲存／檢索 + 待評估 context continuity
 
-目前已實作的是按性質分工的記憶類別、四種實體儲存角色、健康值生命週期與四段
-檢索。UI session 可以長時間存在，但 core 每則訊息仍建立獨立 run；UI 對話不是
-權威狀態，也不預設把整段歷史重播進 prompt。完整契約與 A/B/C/D 候選比較見
+目前已實作的是按性質分工的記憶類別、四種實體儲存角色、健康值生命週期與
+「強命中短路 + RRF 融合 + 回水」檢索(§6.4)。UI session 可以長時間存在，但 core
+每則訊息仍建立獨立 run；UI 對話不是權威狀態，也不預設把整段歷史重播進 prompt。
+完整契約(MEM-01..17 不變量)與 A/B/C/D 候選比較見
 **[docs/MEMORY-zh.md](docs/MEMORY-zh.md)** / **[docs/MEMORY-en.md](docs/MEMORY-en.md)**。
 
 | 層 | 回答的問題 | 存哪 | 生命週期 |
@@ -275,6 +301,36 @@ flowchart LR
 
 **核心原則:壓縮永不等於丟失**——每條蒸餾記憶留有回溯路徑,摘要錯了可重蒸餾。
 
+### 4.0.a 上下文處理(Context Builder:每次 run 怎麼組 prompt)
+
+無狀態核心的直接推論:**上下文不是累積出來的,是每次重建出來的**。每則訊息
+建立獨立 run,Context Builder 按固定優先序組裝最小上下文:
+
+```text
+① 系統規則 + 子 agent 契約(agents/*.md)          ← 永遠在,git 版控
+② 當前使用者指令(原句)                            ← 本次 run 的唯一輸入
+③ 權威 Working State(DB1:tasks/projects/cursors) ← 讀最新,不讀歷史對話
+④ vault/agent/ 的 INDEX 一行描述清單               ← 漸進揭露(幾百 token)
+⑤ 按需檢索結果(recall:強命中短路→RRF→rehydrate)  ← 只有需要才查
+```
+
+四條上下文鐵律(完整不變量見 docs/MEMORY-zh.md MEM-01/06 與 §4.2):
+
+1. **漸進揭露**:`vault/agent/` 只注入 INDEX 一行描述;子 agent 按需開檔。
+   絕不整包塞 prompt——「塞更多記憶進 context 會傷推理」有外部實證
+   (Engram U 型曲線,見 docs/MEMORY-zh.md §5 註記)。
+2. **UI session ≠ 上下文來源**:Discord/OpenCode 可以維持長對話,但 core 不重播
+   聊天歷史;「繼續昨天的工作」靠 DB1 查詢重建(§6.2),不靠 session 記憶。
+3. **摘要不是持久化**:LLM 生成的摘要/compaction 在通過 checkpoint/proposal
+   寫入流程前只是觀測性 context,不能覆蓋權威狀態(MEM-06)。
+4. **壓力淘汰有序**:context 過大時先丟低分命中、重複工具輸出、可重讀全文
+   (換成 reference);永遠保留系統規則、當前指令、權威 constraints、直接證據。
+   精確 token cap 須經量測配置,不憑空指定。
+
+子 agent 側的上下文隔離(Clean Summary Discipline,§3):子 agent 拿 scoped
+最小輸入,中間推理過程留在子 context 用完即棄,orchestrator 只收結構化摘要
+——雙重隔離,防止任何一層累積成肥大 session。
+
 ### 4.0 多層記憶決策狀態（尚未定案）
 
 「儲存分層」「檢索階段」「跨 run 任務 continuity」「LLM 自主 paging」是四個不同
@@ -283,13 +339,20 @@ flowchart LR
 | 方案 | 狀態 | 內容 |
 |---|---|---|
 | A 現況 | `[IMPLEMENTED]` | 無狀態 run + 從權威資料重建 + 按需檢索 |
-| B Task Capsule | `[CANDIDATE]` | A + 結構化 goal/constraints/decisions/open-loops checkpoint |
+| B Task Capsule | `[CANDIDATE]`(已實測一輪:retain_a) | A + 結構化 goal/constraints/decisions/open-loops checkpoint |
 | C 受控 warm set | `[CANDIDATE]` | B + deterministic task-scoped cache/eviction |
 | D LLM 自主 paging | `[CANDIDATE]` | C + STM↔MTM↔LPM 自主管理；須實測勝過 C |
 
 先驗證 A 是否有可重現缺陷，再依序評估 B、C、D。B/C/D 均未授權實作；D 也不是
 永久拒絕，而是證據門檻最高。Task Capsule 若採用，只保存結構化 checkpoint 與
 evidence references，不保存 chain-of-thought 或完整聊天。
+
+**part-003.2 實證(2026-07-16)**:以可丟棄 SQLite 原型、七個 workload、預註冊
+門檻做 A/B 公平比較 → **判定 retain_a**(0/7 qualify;B 因安全 stale-by-default
+照樣重讀權威,未省 authority reads,p95 超預算)。報告:
+[docs/ECC-TASK-CAPSULE-REPORT-zh.md](docs/ECC-TASK-CAPSULE-REPORT-zh.md)。
+未來若重測 B,指標應改量「LLM 重建任務狀態的認知負荷」而非 IO reads
+(backlog-031,需真實 LLM 迴圈);觸發條件仍是 A 出現可重現失敗(MEM-17)。
 
 ### 4.1 健康值代謝(取代硬 TTL)
 
@@ -311,7 +374,9 @@ stateDiagram-v2
 ```
 
 可物理刪除的只有:暫存檔、重複內容、過期 CDN URL、raw debug dumps。
-衰減公式與參數(衰減率、回血量、trash 保留天數)為 part-003 可調項,不在此定死。
+已實作參數(part-003;可調):`HEALTH_DECAY_PER_DAY=0.05`(未命中約 20 天歸零)、
+`TRASH_RETENTION_DAYS=14`。per-category 衰減速率為觸發條件制(backlog-026:
+真實使用 1-2 月有數據再調)。
 
 ### 4.2 Agent 知識庫(`vault/agent/`)
 
@@ -380,7 +445,7 @@ flowchart LR
 
 ## 5. 資料模型
 
-### 5.1 DB1 `state.db` 完整 DDL(七張表已實作;directives 為 part-006 [PLANNED])
+### 5.1 DB1 `state.db` 完整 DDL(八張表全部已實作)
 
 ```sql
 -- 行程 (免疫衰減)
@@ -479,8 +544,7 @@ CREATE TABLE pending_proposals (
 );
 CREATE INDEX idx_pending_status ON pending_proposals(status);
 
--- 遠端指令佇列 (part-006 slice-1 實作;目前 stm 為七表,此表隨 part-006 加入)
--- [PLANNED] directives:part-006-slice-002 才建立,目前 DB1 尚無此表
+-- 遠端指令佇列 (part-006 已實作:遠端開發迴圈的下一步指令)
 CREATE TABLE directives (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   project      TEXT    NOT NULL,          -- 目標專案 (對應 projects.name 或路徑)
@@ -663,29 +727,37 @@ sequenceDiagram
     C->>S: INSERT agent_runs (本次蒸餾統計)
 ```
 
-### 6.4 recall 三段式檢索
+### 6.4 recall 檢索(強命中短路 + RRF 融合,part-004.5 定案)
 
 ```mermaid
 sequenceDiagram
     actor U as 使用者
     participant R as recall 子 agent
-    participant I as vault INDEX/MOC
+    participant I as vault INDEX registry
+    participant F as FTS5 全文
     participant Vec as 向量索引
     participant V as vault 筆記
     participant X as 冷儲存
 
     U->>R: 「我存過哪些 RAG 做法?」
-    R->>I: ① index-first: 讀 INDEX registry (每篇一行描述)
-    alt 描述命中
-        R->>V: 開 1-3 篇筆記 (不掃全庫)
-    else 未命中
-        R->>Vec: ② 向量檢索 top-k (fallback)
-        R->>V: 開候選筆記
+    R->>I: ① 強命中短路: ≥2 token 命中同一筆記 title/summary
+    alt 強命中
+        R->>V: 直接回傳 (零 FTS/embedding 成本)
+    else 未強命中
+        par 三段並行取候選
+            R->>I: INDEX registry 候選
+        and
+            R->>F: FTS5 trigram 候選 (中文 ≥3 字 MATCH,短查詢 LIKE)
+        and
+            R->>Vec: 向量 KNN 候選 (一次 embedding)
+        end
+        R->>R: ② RRF 融合排名 (k=60) → top-k
+        R->>V: 開候選筆記 (superseded_by 提示)
     end
     opt 摘要精度不足 (要確切數字/名字/日期)
         R->>X: ③ rehydrate: 沿 source_ids 讀原文
     end
-    R-->>U: 答案 + 引用 (id/url)。無來源不得斷言。
+    R-->>U: 答案 + 引用。found 必附 ≥1 條程式驗證過的引用;<br/>空引用一律 not_found (無來源不得斷言)。命中觸發 health 回血。
 ```
 
 ### 6.5 sync 管線(每個平台 skill 同構)
@@ -760,25 +832,27 @@ sequenceDiagram
 my-agent/
 ├── core/                    # 無狀態核心
 │   ├── agent.py          ✅ # 入口:invoke 全流程;--job remind/consolidate/curate/track
-│   ├── stm.py            ✅ # DB1 存取層(七表已實作;directives [PLANNED],§5.1)+ CLI
+│   ├── application.py    ✅ # 統一 invocation 入口(part-006):路由/確認/InvocationResult/agent_runs
+│   ├── stm.py            ✅ # DB1 存取層(八表含 directives,§5.1)+ CLI + pending_claim 原子認領
 │   ├── llm.py            ✅ # OpenAI 相容薄層(重試/JSON 模式/降級/events 記錄)
 │   ├── subagents.py      ✅ # 子 agent 執行器(讀契約→組 prompt→單次呼叫→解析)
 │   ├── proposals.py      ✅ # 提案信封 + payload 驗證(§3.1)
 │   ├── writer.py         ✅ # 唯一寫入口:precheck / apply / confirm_and_apply(二階段重驗)
-│   ├── chat.py           ✅ # 平台無關兩階段確認邏輯(Discord/MCP 共用)
+│   ├── chat.py           ✅ # 平台無關兩階段確認邏輯(CLI/Discord/MCP 共用;pending_claim)
 │   ├── transcript.py     ✅ # 冷儲存:JSONL+.idx、三模式讀取、rebuild_idx 自癒
 │   ├── health.py         ✅ # 代謝:decay/to_trash(原文落地)/on_hit/due_for_distill
 │   ├── ltm.py            ✅ # DB2 vault:init/write_note(ID 防撞)/INDEX registry/read
 │   ├── consolidate.py    ✅ # 夜間蒸餾:分組→LLM→五條驗證→筆記→archived→vindex
 │   ├── vindex.py         ✅ # 檢索索引:FTS5 trigram + vec0 + note_map;rebuild
-│   ├── retrieve.py       ✅ # 四段級聯 + 回血閉環 + rehydrate
+│   ├── retrieve.py       ✅ # 強命中短路 + RRF 融合 + 回血閉環 + rehydrate
 │   ├── curator_pre.py    ✅ # inbox 前處理(hash/依日期去重/欄位補齊)
 │   ├── curate.py         ✅ # curator 管線(評分閘門 4.0/配額/manual_tags 守衛)
-│   ├── recall.py         ✅ # 代理型問答(工具迴圈/引用程式面驗證/回血)
+│   ├── recall.py         ✅ # 代理型問答(工具迴圈/引用程式面驗證/found↔not_found 硬規則/回血)
 │   ├── track.py          ✅ # coding_tracker 管線(三源→LLM→project_update)
 │   ├── scanners.py       ✅ # git_scan + beacon_scan(唯讀、全容錯)
-│   ├── octools.py        ✅ # opencode.db 唯讀讀取器(mode=ro;兼 part-006 資料層)
-│   └── mcp/tools.py      📋 # part-006:MCP 工具定義(與傳輸無關)
+│   ├── octools.py        ✅ # opencode.db 唯讀讀取器(mode=ro;part-006 dev_status 資料層)
+│   ├── tools/            ✅ # 能力層(part-006):catalog/contracts/schedule/tasks/projects/memory
+│   └── mcp/tools.py      ✅ # MCP 工具定義(與傳輸無關):10 工具含 dev_status/directives
 ├── agents/                  # 子 agent 契約:prompt + 輸出 schema + few-shot
 │   ├── schedule.md       ✅ # 行程解析(rrule/remind 預設/evidence=原句)
 │   ├── consolidator.md   ✅ # 蒸餾(episodic/preference/topic/supersedes)
@@ -788,18 +862,19 @@ my-agent/
 │   └── librarian.md      📋 # backlog-017:vault 維護(§4.3;vault 有量再做)
 ├── channels/                # 介面層(INTERFACES.md):薄 adapter 零業務邏輯
 │   ├── discord_bot.py    ✅ # 白名單 fail-closed/按鈕/DM/延遲 import
-│   ├── mcp_stdio.py      📋 # part-006:本機 stdio MCP
-│   ├── mcp_http.py       📋 # part-006:遠程 HTTP/SSE(Tailscale IP,綁公網拒絕)
-│   └── dashboard.py      📋 # part-003.5:唯讀儀表板(FastAPI 127.0.0.1)
+│   ├── mcp_stdio.py      ✅ # 本機 stdio MCP(OpenCode spawn,零網路)
+│   ├── mcp_http.py       ✅ # 遠程 HTTP JSON-RPC(bind guard fail-closed:僅 loopback/RFC1918/Tailscale)
+│   └── dashboard.py      ✅ # 唯讀儀表板(stdlib http.server;127.0.0.1:7777;GET-only+mode=ro)
 ├── skills/                  # 非 LLM 抓取管線(純 CLI)
 │   ├── runner.py         ✅ # skill 執行器(五步驟/login_expired 判定/DB1 記錄)
 │   ├── threads_sync_vendor/ ✅ # vendored clone(pin commit;VENDORED.md;零修改黑箱)
-│   ├── x_sync/           📋 # xarchive JSON 轉換器起步
-│   └── fb_sync/          📋 # 最後做,先 probe
+│   ├── x_sync/           🔨 # phase-0 probe 完成(playwright GraphQL 攔截/transform/store+tests)
+│   └── fb_sync/          🔨 # phase-0 probe 完成(saved 清單攔截/transform/store+tests)
+├── experiments/             # 隔離實驗(不進 core;task_capsule = part-003.2 可丟棄原型)
 ├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
-├── docs/MEMORY-{zh,en}.md ✅ # 記憶系統實作規格(雙語)
-├── tests/                ✅ # 326 tests
-└── data/                    # (在 DATA_DIR=C:\Users\tcart\my-agent-data,不 commit)
+├── docs/                 ✅ # MEMORY-{zh,en}(記憶契約)/TOOLS(能力矩陣)/ECC 實驗報告
+├── tests/                ✅ # 630 tests
+└── data/                    # (在 DATA_DIR,OneDrive 外,不 commit)
     ├── state.db             # DB1
     ├── index.db             # 向量索引(衍生物)
     ├── transcript/          # 冷儲存 JSONL+.idx
@@ -810,8 +885,8 @@ my-agent/
 
 ```mermaid
 flowchart LR
-    P1["✅ Phase 1<br/>schema + CRUD CLI"] --> P2["✅ Phase 2<br/>Orchestrator + writer<br/>+ schedule + remind"] --> P25["✅ Phase 2.5<br/>Discord bot<br/>兩階段確認"] --> P3["✅ Phase 3<br/>記憶核心:冷儲存/代謝<br/>/蒸餾/四段檢索"] --> P4["Phase 4<br/>threads-sync runner ✅<br/>→ curator → recall"] --> P45["Phase 4.5<br/>記憶強化:主題trace<br/>/supersede/RRF"] --> P5["Phase 5<br/>coding_tracker<br/>三源"] --> P6["Phase 6<br/>MCP:遠端開發迴圈<br/>stdio → Tailscale HTTP"]
-    P3 -.-> P35["Phase 3.5<br/>唯讀儀表板<br/>(可插隊)"]
+    P1["✅ Phase 1<br/>schema + CRUD CLI"] --> P2["✅ Phase 2<br/>Orchestrator + writer<br/>+ schedule + remind"] --> P25["✅ Phase 2.5<br/>Discord bot<br/>兩階段確認"] --> P3["✅ Phase 3<br/>記憶核心:冷儲存/代謝<br/>/蒸餾/檢索"] --> P4["✅ Phase 4<br/>threads-sync runner<br/>+ curator + recall"] --> P45["✅ Phase 4.5<br/>記憶強化:主題trace<br/>/supersede/RRF"] --> P5["✅ Phase 5<br/>coding_tracker<br/>三源"] --> P6["✅ Phase 6<br/>MCP:遠端開發迴圈<br/>stdio + Tailscale HTTP<br/>(VPS 真機 QA 待環境)"]
+    P3 -.-> P35["✅ Phase 3.5<br/>唯讀儀表板"]
 ```
 
 | Phase | Gate(驗收條件) | 狀態 |
@@ -820,17 +895,21 @@ flowchart LR
 | 2 | 兩次獨立呼叫之間狀態完全靠 DB1 接續;子 agent 提案被 writer 驗證攔截測試通過 | ✅ 程式面(真 LLM QA 待 key) |
 | 2.5 | 手機 Discord 發「明天開會」→ 預覽 → ✅ → DB1 有列;提醒 DM 收得到 | ✅ 程式面(真連線 QA 待 token) |
 | 3 | 低健康 events 蒸餾後出現在 vault 且可檢索;rehydrate 能沿 source_ids 讀回原文 | ✅ 端到端實跑 |
-| 4 | threads-sync 例行同步跑通(runner ✅);curator 評分閘門+去重;recall 帶引用答對 | 🔨 slice-001 done |
-| 4.5 | 主題 trace 連結生效;supersede 落地(舊筆記標記);RRF 檢索過 golden queries | 📋 |
-| 5 | coding_tracker 三源掃描自動更新 projects 表 | 📋(octools 隨 part-006 提前) |
-| 3.5 | localhost:7777 五版塊有真資料;儀表板物理唯讀(`mode=ro`) | 📋 可插隊 |
-| 6 | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到;排行程跨介面確認 | 📋 stdio 先行 |
+| 4 | threads-sync 例行同步跑通;curator 評分閘門+去重;recall 帶引用答對 | ✅ 2026-07-13(mock 端到端;真同步 QA 待 session) |
+| 4.5 | 主題 trace 連結生效;supersede 落地(舊筆記標記);RRF 檢索過 golden queries | ✅ 2026-07-13 |
+| 5 | coding_tracker 三源掃描自動更新 projects 表 | ✅ 2026-07-13(真三源實跑) |
+| 3.5 | localhost:7777 七版塊有真資料;儀表板物理唯讀(GET-only + `mode=ro` + 零寫入呼叫) | ✅ 2026-07-16(端到端 HTTP smoke) |
+| 6 | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到;排行程跨介面確認 | ✅ 程式面 2026-07-16(630 tests + smoke;VPS+Tailscale 真機 QA 待環境,backlog-008) |
+
+後續 part(007 Personal Model / 008 Knowledge Scout / 009 Proactive Advisor /
+010 crowd-scenario)均已設計待 promote,見 §15 與 `.beacon/PLAN.md`。
 
 ## 11. 開放決策(實作前定案)
 
-- ~~向量索引選型~~ 已定案:**sqlite-vec v0.1.9**(本機實測 KNN OK)。檢索層同時
-  加 **FTS5** 於向量之前——四段級聯:index-first → FTS5 → 向量 → rehydrate。
-  embedding 走 OpenAI 相容 `/v1/embeddings`(EMBED_BASE_URL 可獨立於 LLM 端點)
+- ~~向量索引選型~~ 已定案:**sqlite-vec v0.1.9**(本機實測 KNN OK)+ **FTS5**。
+  檢索自 part-004.5 起為:強 index 命中短路 → INDEX/FTS5/向量三段並行 + RRF 融合
+  (k=60)→ rehydrate(§6.4)。embedding 走 OpenAI 相容 `/v1/embeddings`
+  (EMBED_BASE_URL 可獨立於 LLM 端點)
 - ~~LLM 供應商~~ 已定案:**OpenAI 相容 API**(`openai` 套件 + 可配置 base_url;
   兩檔模型分級 cheap/strong;key 走環境變數)
 - 排程器:Windows Task Scheduler(傾向)vs 常駐 daemon;遷 VPS 後改 cron
@@ -876,7 +955,7 @@ flowchart LR
 | Indexing | 穩定 ID + 受控 tag 詞彙表 + INDEX/MOC 一行描述 + 向量索引(衍生物) |
 | Updating | STM:直接 UPDATE;DB2:新增修正筆記 + superseded_by 鏈;結構化參數走 slot 版本鏈 |
 | Forgetting | 健康值代謝:命中回血、久不用衰減、歸零進垃圾桶;免疫類別不衰減;原始記錄永不刪 |
-| Retrieval | index-first → FTS5 → 向量 → rehydrate 回水(四段級聯;命中觸發 health 回血) |
+| Retrieval | 強 index 命中短路 → INDEX/FTS5/向量三段並行 + RRF 融合(k=60)→ rehydrate 回水(命中觸發 health 回血) |
 | Compression | 蒸餾時 LLM 摘要,必帶 source_ids;原文轉冷儲存 |
 
 ## 14. 對抗肥大的三個硬規則
@@ -896,7 +975,7 @@ flowchart LR
 ```
               ┌────────────────────────┐
               │ Metatron Invocation Core│  無狀態、單次呼叫(不變)
-              │ application.invoke()     │  part-006 slice-001 統一入口 [PLANNED]
+              │ application.invoke()     │  統一入口(part-006 已實作)
               └───────────┬────────────┘
       ┌───────────────────┼─────────────────────┐
       ▼                   ▼                     ▼

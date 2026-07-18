@@ -20,8 +20,9 @@
 - `[IMPLEMENTED]` 四種實體儲存角色、健康值生命週期、蒸餾、四段檢索及回水。
 - `[IMPLEMENTED]` 核心每次 invocation 都獨立執行；連續性來自權威儲存，而非
   累積整段聊天紀錄。
-- `[CANDIDATE]` Task Capsule、task-scoped warm set、LLM 自主 paging。目前只建立
-  A/B/C/D 比較框架，**多層 context 尚未定案**。
+- `[CANDIDATE]` Task Capsule、task-scoped warm set、LLM 自主 paging。已建立
+  A/B/C/D 比較框架；part-003.2 以隔離原型完成一輪 A/B 實測（判定 retain_a，
+  0/7 workload qualify），**多層 context 尚未定案**——B 未被採用也未被永久排除。
 - `[NON-GOAL]` 常駐 conversation brain、未經驗證的全對話自動重播、raw evidence
   物理刪除、LLM 直接持有 SQL/DB/file write primitive。
 
@@ -150,7 +151,7 @@ token cap 必須經量測後配置，文件不憑空指定數字。
 | 方案 | 狀態 | 機制 | 優點 | 風險 |
 |---|---|---|---|---|
 | A 現況 | `[IMPLEMENTED]` | 無狀態 run，每次從權威資料重建 + 按需檢索 | 最簡單、可重放、污染面小 | 長任務可能重讀、遺失非權威中間決策 |
-| B Task Capsule | `[CANDIDATE]` | A + goal/constraints/decisions/completed/open-loops/next-action/evidence refs | 跨 run 恢復清楚 | schema、版本、過期與衝突管理 |
+| B Task Capsule | `[CANDIDATE]`（part-003.2 實測一輪：retain_a） | A + goal/constraints/decisions/completed/open-loops/next-action/evidence refs | 跨 run 恢復清楚 | schema、版本、過期與衝突管理 |
 | C 受控 warm set | `[CANDIDATE]` | B + task-scoped cache，由 deterministic assembler 載入/淘汰 | 減少同 task 重複檢索 | cache invalidation、同步與觀測成本 |
 | D LLM 自主 paging | `[CANDIDATE]` | C + LLM 決定 STM↔MTM↔LPM 搬移 | 可能適合非常長、探索式任務 | 多輪延遲、token、不可重現、污染與恢復複雜度 |
 
@@ -241,7 +242,7 @@ hash/source id，經 curator/writer 驗證。
 | `.idx` 落後 JSONL | `transcript.rebuild_idx` |
 | 蒸餾 LLM 失敗 | events 留在 trash，下輪重試 |
 | vault frontmatter 壞 | 跳過該篇並記 event，不炸全庫 |
-| pending 重複確認 | `[PLANNED]` part-006 slice-001 原子 claim；完成前不得聲稱已解決 |
+| pending 重複確認 | `[IMPLEMENTED]` part-006 slice-001：`stm.pending_claim` 原子認領（併發雙確認只落地一次） |
 | UI session 中斷 | 從 DB1/Beacon/vault 權威狀態重建，不重播整段聊天 |
 
 ## 9. 探針驗證過的實作參考
@@ -276,6 +277,14 @@ run 的工作、隔天恢復、兩個 subagent 平行交接、使用者中途改
 量測：恢復後目標/constraints/next action 正確率、重複檢索次數、context tokens、
 LLM/tool calls、p50/p95 latency、舊狀態載入率、無來源 promotion 拒絕率、並行衝突率、
 故障後可重建性。
+
+**第一輪 A/B 實測已完成（part-003.2，2026-07-16）**：隔離 SQLite 原型、上述七個
+workload、預註冊門檻、deterministic scoring → **判定 retain_a**（0/7 qualify；
+B 為安全 stale-by-default 照樣重讀權威，authority reads 無節省，p95 超預算）。
+正式 schema/runtime 未變更。報告：`docs/ECC-TASK-CAPSULE-REPORT-zh.md`。
+Threats to validity（報告誠實標註）：無真實 LLM 迴圈，成本以 IO proxy 計。
+未來重測 B 的指標應改量「LLM 重建任務狀態的認知負荷」（token/推理步驟），
+而非 IO reads——需真實 LLM 迴圈（backlog-031）。
 
 **MEM-17 — 以問題觸發升級。** A 沒有可重現失敗就維持 A；B 能解決就停在 B；
 只有重複檢索或 context 壓力成為主要成本才測 C；D 必須在相同 workload 上勝過 C。

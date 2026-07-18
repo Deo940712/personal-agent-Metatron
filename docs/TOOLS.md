@@ -59,8 +59,13 @@
 2. **Agent internal tools**：例如 recall 迭代時可用的 `search`、`read_note`、
    `rehydrate` 唯讀白名單，定義於 `agents/recall.md` 與 `core/recall.py`。
 
-兩者不能混為「所有函式皆可讓 LLM 呼叫」。MCP 之後只包裝 catalog 明確暴露的
-capability；agent internal allowlist 仍由程式碼硬控。
+兩者不能混為「所有函式皆可讓 LLM 呼叫」。MCP(part-006 已實作)只包裝 catalog
+明確暴露的 capability——`core/mcp/tools.py` 十個工具:`schedule_list`/
+`schedule_add`/`task_list`/`task_add`/`confirm`/`project_status`/`dev_status`/
+`session_tail`/`directive_list`/`directive_push`,經 stdio(`channels/mcp_stdio.py`)
+與 Tailscale HTTP(`channels/mcp_http.py`,bind guard fail-closed)兩種傳輸暴露;
+寫入類工具回 pending 預覽,`confirm` 走 `pending_claim` 原子認領。agent internal
+allowlist 仍由程式碼硬控。
 
 ## Control plane 與 data plane
 

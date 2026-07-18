@@ -169,10 +169,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_facets_unique_active
   WHERE state IN ('provisional','stable');
 CREATE INDEX IF NOT EXISTS idx_facets_active ON profile_facets(facet_class, state)
   WHERE state IN ('provisional','stable');
+
+-- 主動建議 (part-009:world-diff 反思產出的可過期建議;只建議不行動)
+-- state:pending(剛產)→ pushed(已推 Discord)→ accepted/ignored(使用者回饋)
+--   / expired(過期作廢)。dedup_key:同觀察短期不重推。
+CREATE TABLE IF NOT EXISTS advices (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  priority      TEXT    NOT NULL DEFAULT 'low'
+                CHECK (priority IN ('low','medium','high')),
+  observation   TEXT    NOT NULL,          -- 觀察到什麼(world-diff 事實)
+  suggestion    TEXT    NOT NULL,          -- 建議做什麼
+  evidence_ids  TEXT,                      -- JSON array:冷儲存 entry_id(溯源)
+  actions       TEXT,                      -- JSON array:可選一鍵動作(標準 proposal)
+  state         TEXT    NOT NULL DEFAULT 'pending'
+                CHECK (state IN ('pending','pushed','accepted','ignored','expired')),
+  dedup_key     TEXT,                      -- 去重鍵(同觀察短期不重推)
+  expires_at    INTEGER NOT NULL,          -- 過期即作廢(不堆積)
+  created_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_advices_state ON advices(state, priority);
+CREATE INDEX IF NOT EXISTS idx_advices_dedup ON advices(dedup_key, created_at);
 """
 
 TABLES = ("schedule", "tasks", "projects", "cursors", "agent_runs", "events",
-          "pending_proposals", "directives", "profile_facets")
+          "pending_proposals", "directives", "profile_facets", "advices")
 
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
@@ -836,6 +856,134 @@ def facet_supersede(db: Path | None, old_id: int, new_id: int) -> bool:
         con.close()
 
 
+# ── advices CRUD(part-009-slice-000:主動建議)──────────────────────────
+
+ADVICE_PRIORITIES = ("low", "medium", "high")
+_ADVICE_STATES = ("pending", "pushed", "accepted", "ignored", "expired")
+
+
+def advice_add(db: Path | None, *, priority: str, observation: str,
+               suggestion: str, expires_at: int,
+               evidence_ids: list[str] | None = None,
+               actions: list[dict] | None = None,
+               dedup_key: str | None = None,
+               created_at: int | None = None) -> int:
+    """新增一則 pending advice。fail-closed:priority/文字/expires_at 驗證。
+
+    created_at 可由呼叫端傳入(advisor tick 用邏輯時間,確保配額/去重視窗一致)。
+    """
+    if priority not in ADVICE_PRIORITIES:
+        raise ValueError(f"invalid priority: {priority!r}")
+    if not isinstance(observation, str) or not observation.strip():
+        raise ValueError("observation must be a non-empty string")
+    if not isinstance(suggestion, str) or not suggestion.strip():
+        raise ValueError("suggestion must be a non-empty string")
+    if not isinstance(expires_at, int) or isinstance(expires_at, bool):
+        raise ValueError("expires_at must be an int epoch")
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "INSERT INTO advices (priority, observation, suggestion, evidence_ids, "
+            "actions, dedup_key, expires_at, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (priority, observation.strip(), suggestion.strip(),
+             json.dumps(evidence_ids) if evidence_ids else None,
+             json.dumps(actions, ensure_ascii=False) if actions else None,
+             dedup_key, expires_at, created_at if created_at is not None else now()))
+        con.commit()
+        return cur.lastrowid
+    finally:
+        con.close()
+
+
+def advice_get(db: Path | None, advice_id: int) -> dict | None:
+    con = connect(db)
+    try:
+        rows = _row_dicts(con.execute(
+            "SELECT * FROM advices WHERE id = ?", (advice_id,)))
+        return rows[0] if rows else None
+    finally:
+        con.close()
+
+
+def advice_list(db: Path | None, *, state: str | None = None,
+                priority: str | None = None,
+                now_ts: int | None = None) -> list[dict]:
+    """列 advice。state/priority 過濾;預設排除已過期(now > expires_at)。"""
+    con = connect(db)
+    try:
+        sql = "SELECT * FROM advices"
+        clauses, vals = [], []
+        if state is not None:
+            clauses.append("state = ?")
+            vals.append(state)
+        if priority is not None:
+            clauses.append("priority = ?")
+            vals.append(priority)
+        if now_ts is not None:
+            clauses.append("expires_at > ?")
+            vals.append(now_ts)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY created_at DESC, id DESC"
+        return _row_dicts(con.execute(sql, vals))
+    finally:
+        con.close()
+
+
+def advice_set_state(db: Path | None, advice_id: int, state: str) -> bool:
+    """轉 advice 狀態(pending→pushed→accepted/ignored)。非法 state → ValueError。"""
+    if state not in _ADVICE_STATES:
+        raise ValueError(f"invalid advice state: {state!r}")
+    con = connect(db)
+    try:
+        cur = con.execute("UPDATE advices SET state = ? WHERE id = ?",
+                          (state, advice_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def advice_dedup_recent(db: Path | None, dedup_key: str, since_ts: int) -> bool:
+    """since_ts 之後是否已有同 dedup_key 的 advice(去重判定)。"""
+    if not dedup_key:
+        return False
+    con = connect(db)
+    try:
+        row = con.execute(
+            "SELECT 1 FROM advices WHERE dedup_key = ? AND created_at >= ? LIMIT 1",
+            (dedup_key, since_ts)).fetchone()
+        return row is not None
+    finally:
+        con.close()
+
+
+def advice_count_since(db: Path | None, since_ts: int) -> int:
+    """since_ts 之後產生的 advice 數(每日配額判定)。"""
+    con = connect(db)
+    try:
+        return con.execute(
+            "SELECT COUNT(*) FROM advices WHERE created_at >= ?",
+            (since_ts,)).fetchone()[0]
+    finally:
+        con.close()
+
+
+def advice_expire_due(db: Path | None, now_ts: int) -> int:
+    """把 expires_at 已過且仍 pending/pushed 的 advice 標 expired。回傳筆數。"""
+    con = connect(db)
+    try:
+        cur = con.execute(
+            "UPDATE advices SET state = 'expired' "
+            "WHERE expires_at <= ? AND state IN ('pending','pushed')",
+            (now_ts,))
+        con.commit()
+        return cur.rowcount
+    finally:
+        con.close()
+
+
 # ── CLI ──────────────────────────────────────────────────────────────
 
 def _print_rows(rows: list[dict], cols: list[tuple[str, str]]) -> None:
@@ -904,6 +1052,13 @@ def main(argv: list[str] | None = None) -> int:
     fp.add_argument("id", type=int)
     ff = p_f.add_parser("forget", help="停用不刪;證據仍在,不再載入/升級")
     ff.add_argument("id", type=int)
+
+    p_a = sub.add_parser("advices", help="主動建議(part-009)").add_subparsers(
+        dest="verb", required=True)
+    al = p_a.add_parser("list")
+    al.add_argument("--state", default=None,
+                    choices=["pending", "pushed", "accepted", "ignored", "expired"])
+    al.add_argument("--priority", default=None, choices=["low", "medium", "high"])
 
     p_d = sub.add_parser("directives", help="遠端下指令佇列").add_subparsers(
         dest="verb", required=True)
@@ -1001,6 +1156,14 @@ def _dispatch(args, db: Path | None) -> int:
             print(f"OK: facet #{args.id} forgotten" if ok
                   else f"NOT FOUND / already forgotten: #{args.id}")
             return 0 if ok else 1
+        return 0
+
+    if args.domain == "advices":
+        if args.verb == "list":
+            _print_rows(advice_list(db, state=args.state, priority=args.priority),
+                        [("id", "#"), ("priority", "prio"), ("state", "state"),
+                         ("observation", "observation"), ("suggestion", "suggestion"),
+                         ("expires_at", "expires")])
         return 0
 
     if args.domain == "directives":

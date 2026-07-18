@@ -48,3 +48,9 @@ EMBED_BASE_URL_ENV = "MY_AGENT_EMBED_BASE_URL" # 未設 = 同 LLM_BASE_URL
 # ── 個人模型 facets(part-007;初值保守,真實使用 1-2 月有數據再調) ────
 FACET_STABLE_MIN_EVIDENCE = 3                  # provisional → stable 最少證據次數
 FACET_STABLE_MIN_DAYS = 3                      # 證據須橫跨的最少天數(防單日洗量)
+
+# ── 主動建議 advisor(part-009;防疲勞初值保守) ──────────────────────
+ADVICE_DAILY_QUOTA = 3                          # 每日 advice 產出上限(防噪音)
+ADVICE_DEDUP_WINDOW_DAYS = 3                    # 同 dedup_key 幾天內不重推
+ADVICE_DEFAULT_TTL_DAYS = 3                     # advice 預設過期天數(LLM 未給時)
+ADVICE_PUSH_MIN_PRIORITY = "medium"            # 只主動推 medium/high(low 查詢時才顯示)

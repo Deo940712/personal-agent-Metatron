@@ -158,6 +158,36 @@
         }
       }
     },
+    "part-009": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_advisor.py tests/test_schema.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run `python -m core.stm init` on an existing 9-table DB and confirm advices is added idempotently (re-run is a no-op).",
+            "Add one overdue task and one project with blockers, call advisor.observe, and confirm the world-diff reports overdue_tasks and stalled_projects and quiet=False; on a fresh empty DB confirm observe returns quiet=True."
+          ]
+        },
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_advisor_reflect.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-000"
+          ],
+          "manualQa": [
+            "On a fresh empty DB call advisor.tick with a fake LLM and confirm quiet=True and the fake LLM was never called (zero cost).",
+            "Add one overdue task, call advisor.tick with a fake LLM returning one valid advice, and confirm one advice lands and `advices list` shows it; verify a second tick with the same dedup_key within the window is skipped."
+          ]
+        }
+      }
+    },
     "part-006": {
       "slices": {
         "slice-000": {

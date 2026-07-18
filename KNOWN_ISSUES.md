@@ -183,3 +183,14 @@
 - V3:單 token 查詢走強命中短路(score=token數),融合路徑正確分離
 - V4:中文連續段=1 token 的語意確認('向量索引'是 1 token,強命中需 ≥2 段)
 - V5:_strong_index_hits 全掃後排序,無 early-break 漏筆記
+
+## Audit gate 記錄(2026-07-15, part-006-slice-000 capability tools)
+
+Hands-on QA 實證 1 個使用者可見歧義，當場修正並加入 regression:
+
+- **T1 `fixed@006-0`** `schedule` 與 `tasks` 各自 AUTOINCREMENT，常同時有 `#1`；
+  原 `done 1` task-first fallback 會永遠先完成 task，無法指定同編號 schedule。
+  → 未指定 kind 且兩表都存在時 fail-closed，要求 `done task 1` 或
+  `done schedule 1`；編號只存在一表時保留既有 `done 1` 相容行為。
+- regression:`tests/test_tools.py::test_complete_rejects_ambiguous_unqualified_id_and_accepts_explicit_kind`
+  與 `tests/test_chat.py::test_done_collision_requires_explicit_kind`。

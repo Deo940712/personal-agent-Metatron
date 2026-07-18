@@ -1,8 +1,12 @@
 # MY AGENT — 使用介面文件(前端/後端)
 
 > 本文件是介面層的設計權威;核心架構見 [ARCHITECTURE.md](ARCHITECTURE.md)。
-> 鐵律:**介面 = 薄 adapter,零業務邏輯**。所有介面共用同一個無狀態 Orchestrator;
-> 指令來源只是 `agent_runs.trigger` 的一個值。加減介面永不改 core。
+> 鐵律:**介面 = 薄 adapter,零業務邏輯**。使用者能力共用 `core/tools/` typed
+> capability layer；權限與暴露矩陣見 [docs/TOOLS.md](docs/TOOLS.md)。統一
+> `application.invoke` 入口排在 part-006 slice-001，尚未宣稱已完成。
+> channel 的長連線／UI session 只是 transport boundary；每則訊息仍建立獨立 core
+> run。session 摘要與 OpenCode 對話只能作觀測訊號，不能取代 DB1/Beacon/vault
+> 權威狀態。記憶契約見 [docs/MEMORY-zh.md](docs/MEMORY-zh.md)。
 
 ## 1. 介面矩陣(場景分工)
 
@@ -28,22 +32,31 @@ flowchart TD
     end
     OBS["Obsidian<br/>(直接開 vault,不經 core)"]
 
-    CLI & DC & MCP -->|"invoke(text, trigger, reply_to)"| O["Orchestrator (無狀態)<br/>agent.py"]
+    CLI & DC & MCP -->|"typed capability calls"| T["core/tools/<br/>共用能力邊界"]
+    T --> G["Capability policy / gateway<br/>allowlist + scope"]
+    G --> O["Orchestrator control plane<br/>(無狀態)"]
+    G --> W["Writer commit boundary<br/>validate / confirm / commit"]
     WEB -->|唯讀 SELECT| DB1[(DB1 state.db)]
     WEB -->|唯讀| VAULT[(DB2 vault)]
     OBS --- VAULT
-    O --> DB1
-    O -->|writer 驗證後| VAULT
+    O -->|read / dispatch| DB1
+    W --> DB1
+    W -->|驗證後| VAULT
     RJ["remind job"] -->|notify.send| DC
 ```
 
-介面 → core 的唯一介面(所有 channel 共用):
+目前介面先共用 `core/tools/` 的 `CapabilityContext` / `CapabilityResult`；Discord 的
+文字路由仍由 `core/chat.py` 轉成穩定 `Reply`。下一 slice 才把 CLI/Discord/MCP
+收斂到單一 invocation 結果:
 
 ```python
-def invoke(text: str, trigger: str, reply_to: Callable[[str], None]) -> None
-# trigger: 'cli' | 'chat' | 'scheduler'  (對應 agent_runs.trigger CHECK)
-# reply_to: channel 提供的回覆函式;core 不知道對方是終端機還是 Discord
+def invoke(text: str, ctx: InvocationContext) -> InvocationResult: ...
+# part-006 slice-001 planned;不是 slice-000 已完成 API
 ```
+
+Capability tool call 不必全部繞回 orchestrator：read/propose/架構明定的 auto-apply
+可由 gateway 依 policy 執行；shared-state commit 仍經 writer。這讓 Metatron 保持
+control plane，而不是每個 tool call 的同步 data-plane proxy。
 
 ## 3. CLI(Phase 1-2,已在核心規劃)
 
@@ -76,7 +89,7 @@ def invoke(text: str, trigger: str, reply_to: Callable[[str], None]) -> None
 | `明天 14:00 跟 XX 開會 提前30分提醒` | schedule 子 agent 解析 → 預覽 → 你按 ✅ → writer 落地 |
 | `today` / `week` | 行程+待辦清單(唯讀,免確認) |
 | `todo 買貓砂` | task_change 提案 → 預覽 → ✅ |
-| `done 3` | 標記 task#3 完成(done 免確認,§3.1 規則 7) |
+| `done 3` | 編號唯一時標記完成；task/schedule 撞號時要求 `done task 3` 或 `done schedule 3` |
 | `proj` | projects 表摘要(phase/blockers/next) |
 | (提醒到期) | bot 主動 DM 你:「14:00 會議,30 分鐘後」 |
 
@@ -183,8 +196,9 @@ pending 在 DB1 共用 → MCP 發起、Discord 確認,跨介面一致。
 
 ## 7. 介面層鐵律(全 channel 適用)
 
-1. **零業務邏輯**:channel 只做「收訊 → invoke() → 回訊」;解析、驗證、落地全在 core
-2. **無狀態**:channel 常駐 process 掛了重啟不丟資料;待確認提案持久化在 DB1
+1. **零業務邏輯**:channel 只做收訊與回訊；能力在 `core/tools/`，解析、驗證、落地全在 core
+2. **核心無狀態**:channel/UI session 可常駐，但每則訊息是獨立 run；channel 掛了
+   重啟不丟資料，待確認提案持久化在 DB1
 3. **寫入必走 writer + 確認**(done/查詢免確認);不因來源(Discord/網頁/MCP)開後門
 4. **唯讀介面物理唯讀**:dashboard 用 `mode=ro` 連線
 5. **秘密走環境變數**:DISCORD_TOKEN 等在 config.py 以 `*_env` 引用,不落地

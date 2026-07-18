@@ -7,9 +7,11 @@ social-media posts (Threads / X / FB) into an Obsidian knowledge base, and track
 vibe-coding project progress. Schedule things and receive reminder pushes via
 Discord when out; use CLI and Obsidian at home.
 
-**Core philosophy: discard the context window.** No long chat sessions — every
-invocation reads the database, acts, writes back, and dies. Continuity comes from
-structured memory, not conversation history.
+**Core philosophy: the core does not accumulate conversational state.** A Discord or
+OpenCode UI may keep a long session, but every message creates an independent run:
+read authority → act → write through validation → exit. Continuity comes from
+structured DB1/Beacon/vault/transcript state and on-demand retrieval, not automatic
+replay of an entire chat.
 
 ## Architecture Overview
 
@@ -80,7 +82,15 @@ agent can "rehydrate" the exact original text anytime.
 Implementation spec (full APIs, invariants, failure recovery):
 [docs/MEMORY-en.md](docs/MEMORY-en.md)
 
-**Planned memory upgrades (part-004.5, backed by 2026 papers)**: topic-continuity
+### Multi-layer memory: still under evaluation
+
+Storage tiers, retrieval stages, cross-run task checkpoints, and LLM-managed
+STM→MTM→LPM paging are different mechanisms. Only **A: stateless reconstruction plus
+on-demand retrieval** is implemented. **B: Task Capsule**, **C: task-scoped warm set**,
+and **D: LLM-managed paging** remain candidates, evaluated A→B→C→D on real long-running
+work; if an earlier option is sufficient, complexity stops there.
+
+**Memory upgrades (part-004.5, done, backed by 2026 papers)**: topic-continuity
 distillation (Membox: same-topic events woven into cross-day traces instead of
 per-day fragments), contradiction detection + supersede execution (Mneme: keep
 both sides, co-surface at retrieval, check superseded_by before citing), and RRF
@@ -94,13 +104,15 @@ reranking (when golden queries show ranking issues) and per-category decay rates
 LangGraph / Claude Agent SDK / OpenAI Agents SDK converged on in 2026). Subagents
 receive scoped input, return a structured proposal, and vanish.
 
-### The write law: agents propose, code validates, a single writer lands
+### The write law: scoped agent tools, code validation, one commit boundary
 
-Subagents **never write to databases directly**. All writes go through `writer.py`:
-seven validation rules (target exists, tags in controlled vocabulary, evidence
-verbatim, legal enums…) plus three-tier danger gates (physical deletion is
-impossible / writes require user confirmation / read-only auto-allowed).
-Confirmation timeout = deny (fail-closed).
+Subagents may directly call allowlisted read/propose/low-risk auto-apply capabilities;
+Metatron does not need to proxy every tool call. The LLM never receives raw SQL, a DB
+connection, arbitrary file writing, or bare `writer.apply`. Agent- and user-initiated
+proposal mutations cross `writer.apply` validation; trusted internal job pipelines (such
+as nightly distillation) use their own deterministic validated write paths; neither
+bypasses validation. Risky operations use preview→confirm, and timeout denies. Metatron
+is the control plane, not a synchronous data-plane proxy.
 
 ### Subagent roster
 
@@ -113,15 +125,16 @@ Full registry in [AGENTS.md](AGENTS.md) §Angel naming registry.
 | **Sandalphon** — `schedule` | Natural language → schedule/todo proposals ("meeting tomorrow 2pm, remind me 30 min before"); rrule recurrence | User utterance + active items | `schedule_change` / `task_change` proposal | ✅ |
 | **Raziel** — `consolidator` | Nightly distillation: expired events → daily-log summaries (episodic) / user preferences (agent/profile); every decision passes field-level validation, sources must not be fabricated | Batch of due events | Distill groups (kind/title/summary/tags/source_ids/confidence) | ✅ |
 | **Jophiel** — `curator` | Post scoring (0-10 gate), classification, cross-source dedup, vault intake, linking; Chinese FIRE card-splitting | Inbox note batch | `classify_note` proposal | ✅ |
-| **Zerachiel** — `recall` | Knowledge-base Q&A: RRF cascade (index → FTS → vector) + rehydrate; answers must cite sources; superseded_by hints | Query string | Cited answer | ✅ |
+| **Zerachiel** — `recall` | Knowledge-base Q&A: RRF cascade (index → FTS → vector) + rehydrate; non-empty citations are each verified against the registry (bogus citation drops the whole answer); superseded_by hints. The strict found/not_found contract (a claim must carry a citation) is part-006-slice-001 [PLANNED] | Query string | Cited answer | ✅ |
 | **Uriel** — `coding_tracker` | Vibe-coding progress from three read-only signals (git log + `.beacon/CURRENT.md` + OpenCode sessions, beacon = highest authority) → per-project phase/blockers/next | Registered project list | `project_update` proposal | ✅ |
 | **Anael** — `librarian` | Vault caretaker: orphans / broken links / duplicates / tag sprawl / INDEX drift; two-phase (deterministic scan + opt-in LLM consolidation), snapshot-rollback, never deletes | Deterministic vault.scan report | `vault_maintenance` proposal (dry-run first) | 📋 backlog-017 |
 | sync-{threads,x,fb} | Platform capture pipelines (**non-LLM**, pure CLI: Capture→State→Transform→Output, idempotent, resumable) | cursor | new_count, status | threads ✅ / x,fb 📋 |
 
 Two subagent types: **pure-function** (single LLM call, no tools, replayable —
-Sandalphon/Raziel/Jophiel/Anael/Uriel) and **agentic** (read-only tool
-whitelist, iterative retrieval — Zerachiel only). The only write-capable tool
-in the whole system is `writer.apply`.
+Sandalphon/Raziel/Jophiel/Anael/Uriel) and **agentic** (currently Zerachiel uses an
+iterative read-only tool loop). More agents receive tools only when each next step
+genuinely depends on the previous result, with scope/budget/timeout controls. Shared
+state still has one deterministic writer commit boundary.
 
 > Michael / Camael / Raphael / Ophanim / Cassiel / Azrael are angel names the
 > user proposed but currently have **no matching agent** — archived in
@@ -139,8 +152,10 @@ in the whole system is `writer.apply`.
 | Web dashboard | At-home overview + system health (127.0.0.1, read-only) | RO | 📋 part-003.5 |
 | MCP server | Query the assistant from inside OpenCode/Claude Code | RO-first | 📋 part-006 |
 
-Interfaces are thin adapters with zero business logic, sharing
-`invoke(text, trigger, reply_to)`. Design: [INTERFACES.md](INTERFACES.md).
+Interfaces are thin adapters with zero business logic. The today/week/project/
+todo/done/recall paths now share the typed `core/tools/` capability layer. See
+[docs/TOOLS.md](docs/TOOLS.md) for the authoritative feature/agent/interface/
+permission/storage matrix and [INTERFACES.md](INTERFACES.md) for interface design.
 
 ## Usage
 
@@ -182,7 +197,7 @@ VPS means editing one file.
 
 | Risk | Mechanism |
 |---|---|
-| Memory hallucination | Hard provenance rule: every note carries its source; recall makes no claim without one; raw text is rehydratable |
+| Memory hallucination | Hard provenance rule: every note carries its source; recall verifies each non-empty citation against the registry (bogus citation drops the whole answer); raw text is rehydratable. Enforcing "a claim must carry a citation" is [PLANNED] |
 | LLM decision pollution | Every distillation decision passes field-level validation (no fabricated source_ids); failures skipped and logged |
 | Rogue subagent writes | Proposal protocol + single writer + danger gates; confirmation timeout fail-closed |
 | Data loss | Raw text append-only, never deleted; failed distillations stay in trash for retry; index is rebuildable |
@@ -191,7 +206,7 @@ VPS means editing one file.
 ## Development
 
 ```bash
-python -m pytest tests/ -q     # 314 tests
+python -m pytest tests/ -q     # 326 tests
 ```
 
 Workflow: [Beacon](.beacon/PLAN.md) (plan → design → slice → execute → verify →
@@ -204,6 +219,7 @@ into a regression test.
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System design authority (schemas, flow diagrams, design rationale) |
 | [INTERFACES.md](INTERFACES.md) | Interface layer design (CLI/Discord/dashboard/MCP) |
+| [docs/TOOLS.md](docs/TOOLS.md) | Capability, agent, interface, permission, and storage matrix |
 | [docs/MEMORY-en.md](docs/MEMORY-en.md) | Memory system implementation spec (APIs, invariants, failure recovery) |
 | [KNOWN_ISSUES.md](KNOWN_ISSUES.md) | Audit findings and fix records |
 

@@ -11,11 +11,17 @@
 ## Non-goals
 
 - 不做長 session / 對話歷史累積（核心必須無狀態）
-- 不做多層記憶分頁（STM→MTM→LPM，MemoryOS 式）——延遲實測不可接受
+- 多層記憶尚未定案：保留現有儲存分工與級聯檢索；Task Capsule、task-scoped
+  warm set、LLM 自主 paging 必須分開以真實任務評估。不得把候選方案寫成已採用。
 - 不做 DB2 刪除（append-only；原始記錄 transcript 層永不刪）
 - 不做反偵測規避（社交平台抓取沿用低頻 + jitter）
 - 不做知識圖譜三元組 / hooks 聯想網 / GWM（memory-river 的重子系統，個人量級過度工程）
-- 子 agent 不直接寫 DB（只提案，writer.py 驗證後落地）
+- LLM 子 agent 不持有 raw SQL／DB connection／任意檔案寫入權；可依靜態
+  allowlist 呼叫 scoped read/propose/auto-apply capability。共享狀態的 commit
+  仍由 deterministic writer boundary 驗證，不要求 orchestrator 逐筆代轉。
+- **不接 OpenHuman 程式碼**（GPL-3.0 + 自帶 SQLite/vault/orchestrator/workflow/channels，與本專案核心全面重複；只 clean-room 借「learning facets / subconscious world-diff / advice-first」概念，用 Python 自寫，見 backlog-027）
+- **不做常駐 agent graph / 三層 subagent / 背景無限自我思考**（OpenHuman 式持久 orchestration 與無狀態核心衝突）——「活」= 定期醒來看 world-diff、產可過期建議、真實行動仍走確認，不是自主改狀態
+- **模擬層不得改真實狀態**：crowd-scenario / MiroFish 只讀 bucket 化 seed、只回 advisory 報告；永不讀寫 DB1/vault/transcript 原文，也不得繞過 writer
 
 ## PARTs
 
@@ -25,11 +31,18 @@
 | part-002 | **done** (2026-07-13) | Orchestrator + writer + LLM 薄層 + schedule 子 agent + remind job；93 tests 綠、Phase 2 gate 程式面通過（真 LLM QA 待 key） | `.beacon/parts/part-002/DESIGN.md` | `.beacon/done/part-002/` |
 | part-002.5 | **done** (2026-07-13) | Discord bot：兩階段確認 + 提醒 DM + 白名單；210 tests 綠，真連線 QA blocked（等使用者環境） | `.beacon/parts/part-002.5/DESIGN.md` | `.beacon/done/part-002.5/` |
 | part-003 | **done** (2026-07-13) | 記憶核心完成：transcript+health+consolidate+vindex+retrieve；162 tests 綠、Phase 3 gate 通過（端到端實跑） | `.beacon/parts/part-003/DESIGN.md` | `.beacon/parts/part-003/TODO.md` |
-| part-003.5 | designed | 唯讀儀表板：FastAPI+htmx 單頁、127.0.0.1:7777、三層唯讀保證（GET-only/mode=ro/測試斷言）、六版塊含 directives；排 part-006 slice-1 之後 | `.beacon/parts/part-003.5/DESIGN.md` | `.beacon/parts/part-003.5/TODO.md` |
+| part-003.1 | **done** (2026-07-15) | 記憶架構文件契約：雙語規格、目前實作與候選多層方案分界、A/B/C/D 評估框架、agent capability／writer 權限邊界；無 runtime/schema 變更；326 tests 綠、文件驗證器 + 負向探針通過 | `.beacon/parts/part-003.1/DESIGN.md` | `.beacon/done/part-003.1/` |
+| part-003.2 | **done** (2026-07-16) | ECC 技術評估 + 隔離 Task Capsule A/B 實驗：可丟棄 SQLite 原型、七 workload 公平比較 A vs B、預註冊門檻、deterministic scoring；**判定 retain_a**（0/7 qualify，B p95 超預算，成本 proxy 無改善）；未採用 B/C/D、未改正式 schema/runtime；531 tests 綠、6 對抗探針通過 | `.beacon/parts/part-003.2/DESIGN.md` | `.beacon/done/part-003.2/` |
+| part-003.5 | **done** (2026-07-16) | 唯讀儀表板：**stdlib http.server**（零依賴，非 FastAPI）單頁、127.0.0.1:7777、三層唯讀保證（GET-only/mode=ro/無寫入呼叫）、七版塊含 directives；608 tests 綠、端到端 HTTP smoke + 5 對抗探針通過 | `.beacon/parts/part-003.5/DESIGN.md` | `.beacon/done/part-003.5/` |
 | part-004 | **done** (2026-07-13) | sync skills + curator + recall；254 tests、Phase 4 gate（mock 端到端）通過；真同步/LLM QA blocked | `.beacon/parts/part-004/DESIGN.md` | `.beacon/done/part-004/` |
 | part-004.5 | **done** (2026-07-13) | 記憶強化：Membox 主題trace + Mneme supersede + Cognis RRF；280 tests、Phase 4.5 gate 通過 | `.beacon/parts/part-004.5/DESIGN.md` | `.beacon/done/part-004.5/` |
 | part-005 | **done** (2026-07-13) | coding_tracker 三源掃描；314 tests、Phase 5 gate（真三源端到端）通過 | `.beacon/parts/part-005/DESIGN.md` | `.beacon/done/part-005/` |
-| part-006 | designed | MCP server：一套工具兩傳輸——slice-1 本機 stdio（OpenCode 直問，現可做）+ slice-2 遠程 HTTP/SSE over Tailscale（VPS 後）；讀寫皆可，寫走 writer+確認 | `.beacon/parts/part-006/DESIGN.md` | `.beacon/parts/part-006/TODO.md` |
+| part-006 | code done, VPS QA blocked | MCP server：能力工具基座 + 互動硬化 + 本機 stdio MCP + 遠程 HTTP JSON-RPC（bind guard fail-closed，只允 loopback/RFC1918/Tailscale）全部**程式面完成**；630 tests 綠、端到端 smoke + 對抗探針通過；讀寫皆走 capability policy + writer/確認邊界。剩 slice-003 的 VPS + Tailscale 真機手動 QA（backlog-008） | `.beacon/parts/part-006/DESIGN.md` | `.beacon/parts/part-006/TODO.md` |
+| part-007 | designed | **Personal Model**（個人模型）：DB1 `profile_facets` 表——證據驅動 stability facets（class/key/value/confidence/stability/evidence_ids/state/user_override），投影成 vault/agent/profile 可讀筆記；學習有生命週期（observed→provisional→stable→pinned→superseded/forgotten）；借鑑 OpenHuman learning 概念（clean-room，見 backlog-027） | `.beacon/parts/part-007/DESIGN.md` | 待 slice |
+| part-008 | designed | **Knowledge Scout**（網路知識取得）：opt-in + allowlist 網路研究；外部內容標記 `external_untrusted`（web = 資料非指令，防 prompt injection）；保存 URL/author/captured_at/content_hash → inbox → curator 評分 → writer → vault；自動研究僅由知識缺口/watchlist/來源過期觸發 | `.beacon/parts/part-008/DESIGN.md` | 待 slice |
+| part-009 | designed | **Proactive Advisor / Subconscious**（主動建議）：排程 world-diff quiet-tick 反思（無變化不呼叫 LLM）；產出**可過期 advice 提案**（observation/suggestion/evidence/expires_at/actions），主動推 Discord，但 action 仍走 preview→confirm→writer；永不靜默改狀態；借鑑 OpenHuman subconscious 概念 | `.beacon/parts/part-009/DESIGN.md` | 待 slice |
+| part-010 | designed | **crowd-scenario integration**（情境演練）：vendored 釘版（第二個 vendored 黑箱，同 threads-sync）+ subprocess CLI 呼叫；Metatron 產去識別化 bucket seed → 子行程演練 → advisory 報告存 vault，標 non-authoritative；新增個人 domain packs（personal_schedule / habit_change / project_portfolio） | `.beacon/parts/part-010/DESIGN.md` | 待 slice |
+| part-011 | backlog | **MiroFish optional adapter**（大型社會模擬，有實際需求才做）：opt-in 外部隔離 sandbox；Metatron 只輸出去識別化 scenario package（問題/角色/公開背景，不含私人原文）；MiroFish 永不讀寫 DB1/vault/transcript；報告回來標「模擬/非事實/非預測」；AGPL + Zep Cloud 依賴 → 隔離不入核心 | 見 backlog-028 | — |
 
 ## Success Criteria
 
@@ -38,6 +51,11 @@
 - 低健康 events 經夜間蒸餾後出現在 vault episodic/ 且可檢索；rehydrate 可沿 source_ids 讀回原文
 - 任一 skill 管線單獨壞掉不影響 core 與其他 skill
 - 子 agent 提案被 writer 驗證攔截（含拒絕路徑）可測試證明
+- （part-006 slice-001，[PLANNED]）CLI / Discord / MCP 共用單一 invocation 入口回 `InvocationResult`；pending 確認為原子認領（併發雙確認只落地一次）；recall found 答案無有效引用即拒絕
+- （part-007）同一偏好重複出現才升 stable；使用者 pin/forget 硬覆蓋評分；profile facets 可投影成 vault 可讀且可 recall
+- （part-008）網路研究結果帶來源與 `external_untrusted` 標記，經 curator+writer 才進 semantic/；web 內容中的指令注入不被執行
+- （part-009）world-diff 無重要變化 → 不呼叫 LLM；建議帶 expires_at；建議的 action 落地仍走確認
+- （part-010）crowd-scenario 產出標 non-authoritative；輸入只吃 bucket，不含原始數字；子行程壞掉不影響 core
 
 ## Global Risks
 
@@ -46,6 +64,10 @@
 - ~~OneDrive 鎖檔風險~~ 已定案：DATA_DIR 在本地 OneDrive 外；後期遷 VPS 只改 config.py
 - Meta GraphQL 改版會弄壞 sync skills（繼承 threads-sync 已知風險）
 - LLM 回傳 JSON 不穩——schema 約束 + 重試 1 次 + 壞即拒絕（part-002 DESIGN）
+- **主動建議疲勞**（part-009）：advice 有每日配額 + 去重 + 靜默期；低價值建議不推播——避免變成噪音
+- **敏感網路/帳號資料**（part-008）：allowlist + opt-in + 不自動抓私人帳號；抓到的內容不信任、不當指令
+- **模擬被誤當事實**（part-010/011）：所有 scenario 輸出硬標 non-authoritative；不進 recall 事實層，只存 scenario 專區
+- **crowd-scenario / MiroFish 授權**：crowd-scenario MIT（可 vendored）；MiroFish AGPL + Zep Cloud（隔離不入核心）；OpenHuman GPL（僅概念）
 
 ## Global Verification Strategy
 

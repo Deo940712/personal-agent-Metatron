@@ -1,21 +1,40 @@
 # CURRENT
 
 Status: planning-only
+Part: (none active)
+Slice: (none promoted)
 
-part-005 完成(Phase 5 gate 真三源通過)。part-003.5 已設計(DESIGN + TODO 就位)。
+## Context
 
-## 已定執行順序(2026-07-13 使用者定案:兩個都做)
+part-003.1（雙語記憶架構契約）已完成並歸檔至 `.beacon/done/part-003.1/`。
+part-003.2-slice-001（ECC 評估 + 隔離 Task Capsule A/B 實驗）已完成並歸檔至
+`.beacon/done/part-003.2/`（判定 retain_a，未採用 B/C/D、未改正式 schema）。
+part-003.5-slice-001（唯讀網頁儀表板）已完成並歸檔至 `.beacon/done/part-003.5/`：
+stdlib http.server 零依賴、七版塊、三層唯讀保證。
+part-006 全 slice 程式面完成並歸檔至 `.beacon/done/part-006/`：
+- slice-000 能力工具基座 / slice-001 互動硬化 / slice-002 本機 stdio MCP
+- slice-003 遠程 HTTP JSON-RPC（bind guard fail-closed，只允 loopback/RFC1918/
+  Tailscale；630 tests 綠、端到端 smoke + 5 對抗探針通過）
+**唯一剩餘**：slice-003 的 VPS + Tailscale 真機手動 QA（blocked 至 VPS 階段，
+checklist 見 backlog-008）。
 
-1. **part-006 slice-1**(先):stdio MCP + directives 第八表——它改共用檔 stm.py,
-   先動 schema
-2. **part-003.5**(後):唯讀儀表板——純新檔零重疊,且可順帶顯示 directives 版塊
+## Next candidate (NOT promoted — awaits user gate)
 
-## 待使用者動作(累積四批真 QA,不 block)
+- part-007（Personal Model：profile_facets 學習生命週期）
+- part-008（Knowledge Scout：opt-in 網路研究 + external_untrusted 隔離）
+- part-009（Proactive Advisor：world-diff quiet-tick 可過期建議）
+- 或在真實 LLM 迴圈下重測 Task Capsule B。
+（各 part 設計見 `.beacon/PLAN.md` PARTs 表）
 
-1. `MY_AGENT_LLM_API_KEY` → 真 LLM/embedding QA
-2. Discord token + user id → 真 Discord QA
-3. threads-sync Playwright session → 真同步 QA
+## Blocked（等使用者環境）
 
-## 下一步
+- part-006-slice-003 VPS + Tailscale 真機端到端 QA。
+- 四批真 QA：LLM key / Discord token / threads session / MCP 本機連線。
 
-promote part-006-slice-001 到本檔即開工。
+## Open decision (documentation-only, no implementation yet)
+
+- 多層記憶：A（現況）維持。B（Task Capsule）已實證比較 → retain_a，未採用；
+  是否在真實 LLM 迴圈下重測 B、或採用 B 進 production，留作使用者未來決策
+  （需獨立 production-design 提案）。C（warm set）、D（LLM paging）無證據，未授權。
+  報告見 `docs/ECC-TASK-CAPSULE-REPORT-zh.md`；證據見
+  `.omo/evidence/task-13-ecc-task-capsule-experiment-summary.{json,csv}`。

@@ -7,10 +7,13 @@ after angels in Metatron's court (see "Angel naming registry" section below).
 Angel names are display-layer only; code identifiers (module names, role_type,
 --job flags) keep their technical names for API stability.
 
-A personal schedule + knowledge-base assistant agent (parts 001-005 + 002.5 + 004.5 all done,
-314 tests green; next: part-006 stdio MCP then part-003.5 dashboard). The full architecture decision record is in
+A personal schedule + knowledge-base assistant agent (parts 001-005 + 002.5 + 004.5 all done;
+326 tests green after the part-006 capability foundation; current work is the part-003.1
+memory documentation contract, then part-006 interaction hardening). The full architecture decision record is in
 [ARCHITECTURE.md](ARCHITECTURE.md) — read it before implementing anything.
 Interface layer design authority: [INTERFACES.md](INTERFACES.md).
+Capability ownership/exposure authority: [docs/TOOLS.md](docs/TOOLS.md). User-visible
+capabilities live in `core/tools/`; low-level `stm`/SQL/writer dispatch stay private.
 Memory system implementation spec (probe-verified platform behavior — READ before
 touching transcript/health/vindex/consolidate/retrieve):
 [docs/MEMORY-zh.md](docs/MEMORY-zh.md) / [docs/MEMORY-en.md](docs/MEMORY-en.md).
@@ -19,6 +22,27 @@ Predecessor project (patterns to reuse):
 
 `.codegraph/` and `.omo/` are external tooling state, not project code — ignore them.
 Not a git repo yet. User communicates in zh-TW (Traditional Chinese); reply in Chinese.
+
+## Session-open rule (remote dev-loop directives — part-006-slice-002)
+
+At the start of a coding session in this repo, check the remote directive queue and
+act on any pending instruction the user left before you begin other work:
+
+```bash
+python -m core.stm directives pending --project my-agent
+```
+
+If pending directives exist, follow them first (they are the user's next-step
+instructions queued from another interface). After acting on one, mark it consumed:
+
+```bash
+python -m core.stm directives consume <id>
+```
+
+Directives are a low-commitment queue (DB1 8th table, status pending/consumed/
+cancelled); they are NOT injected into a running session — the queue is the reliable
+minimum. The same queue is exposed to MCP clients as `directive_list` / `directive_push`
+via `python -m channels.mcp_stdio` (JSON-RPC 2.0 over stdio, zero-dependency).
 
 ## Known issues (read before touching core/)
 
@@ -43,23 +67,28 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
 
 ## Non-negotiable design rules
 
-- **Stateless agent core.** No long-lived session, no accumulated context. Every
-  invocation: read DB1 → act → write back → exit. Do not introduce
-  conversation-history persistence in the core.
-- **Storage roles (ARCHITECTURE.md §2/§5).** DB1 SQLite = System of Record (6 tables,
-  DDL in §5.1 is authoritative). DB2 Obsidian vault = human knowledge interface
+- **Stateless agent core.** UI/channel sessions may be long-lived, but the core does
+  not accumulate conversation state. Every message creates an independent run:
+  read domain authority → act → validated write → exit. Do not replay whole chat
+  history as authoritative state.
+- **Storage roles (ARCHITECTURE.md §2/§5).** DB1 SQLite = authority for mutable
+  structured state (currently 7 tables; planned directives is not implemented).
+  DB2 Obsidian vault = human knowledge interface
   (append-only, semantic/ + episodic/). Cold transcript JSONL = raw records, never
   deleted. Vector index = derived, rebuildable, never holds unique data.
 - **Memory lifecycle = health metabolism, NOT hard TTL.** Hits heal, disuse decays,
   zero → trash → archive. Schedule/identity/preferences immune. Forgetting means
   "not auto-loaded", never physical deletion.
-- **Subagents propose, writer.py disposes.** Subagents NEVER write DBs directly; all
-  writes go through writer.py validation (target exists, tags in controlled vocab,
-  evidence verbatim in source, never override manual edits). Proposal envelope: §3.1.
-- **Tool registry (§3.2):** the ONLY write-capable tool is `writer.apply`; everything
-  else is read-only. schedule/curator/librarian/coding_tracker are pure-function
-  subagents (no tools — inputs collected deterministically first); only recall gets
-  a read-only tool whitelist.
+- **Scoped tools, deterministic commit.** Subagents may call allowlisted
+  read/propose/auto-apply capabilities directly; they NEVER receive raw SQL, a DB
+  connection, arbitrary file write, or bare apply. Agent/user-initiated proposal
+  mutations pass writer.py validation; trusted internal jobs (e.g. consolidation via
+  ltm/vindex) use their own deterministic validated write paths. Neither bypasses
+  validation. The orchestrator is control plane, not a per-tool proxy.
+- **Tool registry (§3.2 / docs/TOOLS.md):** capability catalog and agent tool allowlist
+  are separate static policies. The ONLY apply-capable tool is `writer.apply`;
+  proposal capabilities cannot bypass it. schedule/curator/librarian/coding_tracker
+  are pure-function subagents; only recall gets a read-only internal tool whitelist.
 - **Danger gates (§3.2, borrowed from Hermes Agent):** hardline blocklist (physical
   deletion of vault/cold-storage/DB1, bypassing writer, overriding manual_tags —
   never executable, no override); confirm-required (schedule writes, librarian
@@ -85,8 +114,11 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
 - **Reminders/schedule writes are deterministic code, not LLM.** LLM only parses
   natural language into candidates and explains conflicts; triggering, recurrence
   expansion, and DB writes are plain Python. Mutations need user preview+confirm.
-- **No hierarchical memory paging** (STM→MTM→LPM à la MemoryOS) and no knowledge
-  graph / hooks / GWM subsystems — rejected as overengineering; see ARCHITECTURE.md §12.
+- **Multi-layer memory is an open decision.** Storage/retrieval layers are implemented;
+  Task Capsule, deterministic task warm set, and LLM-managed STM→MTM→LPM paging are
+  separate candidates evaluated A→B→C→D. Do not implement or permanently reject one
+  without the empirical gate in `docs/MEMORY-*.md`. Knowledge graph/hooks/GWM remain
+  non-goals.
 
 ## Inherited threads-sync conventions (keep them)
 
@@ -103,9 +135,9 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
 
 DONE: 1, 2, 2.5, 3, 4 (threads runner + curator + recall), 4.5 (topic traces /
 supersede / RRF), 5 (coding_tracker, live three-source gate passed).
-NEXT (user-decided order): 6-slice-1 (stdio MCP + directives 8th table — touches
-shared stm.py first) → 3.5 (read-only dashboard, zero overlap, shows directives
-panel too) → 6-slice-2 (Tailscale HTTP, gated on VPS).
+CURRENT: part-003.1 bilingual memory contract (docs only). NEXT: part-006 interaction
+hardening → stdio MCP/directives;
+then part-003.5 read-only dashboard; HTTP/Tailscale remains gated on VPS.
 Key facts for future sessions:
 - OpenCode session store confirmed readable: `~/.local/share/opencode/opencode.db`
   (SQLite, WAL; tables session/message/part/todo) — open `mode=ro` only.
@@ -126,8 +158,9 @@ Full list in ARCHITECTURE.md §11. Highlights:
 - Scheduler: Windows Task Scheduler (leaning) vs resident daemon; cron after VPS move
 - ~~Reminder channel~~ DECIDED: Discord DM (INTERFACES.md §4); console during dev
 - Health metabolism parameters (decay rate, heal amount, trash retention) — tune in part-003
-- Channels are thin adapters with ZERO business logic; all share
-  `invoke(text, trigger, reply_to)`; writes never bypass writer+confirm regardless of source
+- Channels are thin adapters with ZERO business logic and share `core/tools/` typed
+  capabilities. Unified `application.invoke` is the next slice; writes never bypass
+  writer+confirm regardless of source.
 
 ## Angel naming registry
 

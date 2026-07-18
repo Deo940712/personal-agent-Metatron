@@ -181,9 +181,74 @@ Status: resolved
 
 Summary: 已定案——DATA_DIR = `C:\Users\tcart\my-agent-data`（本地、OneDrive 外）。後期遷 VPS 只改 config.py。
 
+### backlog-027: OpenHuman 概念借鑑(不接程式碼)
+
+Type: decision
+Status: resolved (2026-07-14)
+
+Summary: 評估 [tinyhumansai/openhuman](https://github.com/tinyhumansai/openhuman)(GPL-3.0、Rust、Early Beta、大型桌面 Agent OS)。**決定:只 clean-room 借概念,不接程式碼、不接核心。** 理由:①它自帶 SQLite memory / Obsidian wiki / tinyagents graph / tinyflows workflow / channels / MCP / subconscious,與 Metatron 核心全面重複,直接接會出現「哪邊才是真實資料」的 SoR 崩壞;②執行模型相反(它是常駐 checkpointed graph + 三層 subagent + 背景 heartbeat,Metatron 是無狀態單次呼叫、單層即棄);③GPL-3.0,搬程式或連結會產生衍生作品限制。**借的概念**(用 Python 自寫):learning facets(證據/穩定度/pin/forget → part-007)、subconscious world-diff + quiet-tick(→ part-009)、advice-first proactivity。**不借**:persistent agent graph、三層 subagent、它的 SQLite/vault、workflow engine、channels、x402/wallet、Rust runtime。
+
+### backlog-028: MiroFish 未來隔離 adapter
+
+Type: idea
+Status: triage (gate: 有實際大型模擬需求才做 → part-011)
+
+Summary: 評估 [666ghj/MiroFish](https://github.com/666ghj/MiroFish)(AGPL-3.0、Python、Flask+Vue、依賴 Zep Cloud + OASIS + CAMEL-AI)。它是大型多人社會模擬/輿論預測器(輸入文件 → GraphRAG → 生成大量 OASIS persona → 模擬 Twitter/Reddit → 預測報告),**不是個人助理記憶系統**。**決定:不進核心;未來做 opt-in 外部隔離 adapter(part-011)。** 只有真的需要大型社會型模擬(產品上市反應、輿論演化、政策連鎖)時才用;Metatron 只輸出去識別化 scenario package(問題/角色/公開背景,不含私人原文),MiroFish 永不讀寫 DB1/vault/transcript,報告回來硬標「模擬/非事實/非預測」。AGPL + Zep Cloud 依賴 → 隔離不入核心。日常小型演練用 crowd-scenario(part-010)即可,不需要 MiroFish。
+
+### backlog-029: AgentSpec / model 分級 registry
+
+Type: idea
+Status: triage (gate: part-007+ 有多個新 agent 型別時)
+
+Summary: 架構審查發現子 agent 契約頂部的 `type/model/tools` 只是文件、程式沒讀(`LLM_MODEL_STRONG` 實際未用)。建議建一個**靜態** `AGENT_SPECS` registry(display_name/contract/execution/output_kind/model_tier/tools),用於啟動時驗證契約存在、確認 output kind、文件與程式對照。但**工具權限仍由程式碼硬白名單控制**(不因 markdown 寫了 tools 就授權)。不做動態 plugin framework。時機:part-007+ 出現多個新 agent 型別(Personal Model / Advisor / Scout)時一起建,不預先造抽象。
+
 ### backlog-008: VPS 遷移
 
 Type: idea
 Status: triage
 
 Summary: 後期把 data/ + vault 遷上 VPS。空間需求約 5–10 GB（圖片附件為大宗）。前提：config.py 路徑抽象已就位（part-001 保證）。排程器屆時改 cron。
+
+VPS 遷移 checklist（part-006-slice-003 MCP HTTP 就位後）：
+1. 裝 Tailscale，取得本機 Tailscale IP（`100.64.0.0/10` CGNAT range）。
+2. 設環境變數 `MY_AGENT_MCP_BIND_HOST=<Tailscale IP>`（未設 = 127.0.0.1 僅本機）。
+3. 啟動 `python -m channels.mcp_http`（綁 config.MCP_HTTP_PORT=7788）。bind guard
+   fail-closed：綁公網 IP 或 0.0.0.0 → 拒絕啟動（Tailscale 已是 WireGuard 加密私網，
+   不需 token/TLS）。
+4. 筆電 OpenCode 設 MCP server URL 指向 `http://<Tailscale IP>:7788` → 遠端問答/排程/確認。
+5. 排程 job（remind/consolidate/curate/track）改 cron；DATA_DIR 改 VPS 路徑（只改 config.py）。
+6. 手動 QA：筆電 OpenCode 遠端連 → dev_status/排行程→確認→落地端到端。
+
+### backlog-030: 強命中短路擴大覆蓋（Engram「查表先於計算」實證支持）
+
+Type: idea
+Status: triage
+
+Summary: DeepSeek Engram 論文（arXiv 2601.07372）證明：確定性、便宜的 O(1) 查表若設計得好，是一等元件、不是雜項優化——命中就繞過昂貴計算。對應本專案 `core/retrieve.py` §4.1 的**強 index 命中短路**（≥2 token 命中同筆記 title/summary → 零 embedding/FTS 直接回）。此項是**純省成本、零風險**方向：讓短路更常命中、更廣覆蓋。
+
+觸發條件：real workload 觀察到 recall 頻繁走到向量 KNN（step 3）而其實答案在 INDEX registry 就有 → 才動工。
+可能做法（待觸發後評估，不預先實作）：更多筆記進 INDEX、改善 distilled title/summary 品質、單 token 查詢也允許短路的條件放寬。量測基準：短路命中率、平均省下的 embedding 呼叫數。
+**MEM 對齊**：不改權威、不改 A/B/C/D 決策；純檢索層優化，屬 §4.1 既有機制的調校。
+
+### backlog-031: Task Capsule（方案 B）評估指標改寫——量「LLM 認知負荷」而非「IO reads」
+
+Type: question
+Status: triage
+
+Summary: part-003.2 A/B 實驗測出 `retain_a`，因 B 為安全 stale-by-default 照樣重讀權威、沒省到 authority reads。**但 Engram 論文指出 B 的真正收益不在 IO**——在於 LLM 不必每次「重新拼湊出任務狀態」（論文：記憶模組讓推理任務提升**更大**，BBH +5.0、NIAH 84.2→97.0，因為釋放了早期層的重建負荷）。
+
+決策問題：若未來重測 B，指標應從「開了幾個檔案 / 省了幾次 read」改為「**LLM 要花多少 token / 多少推理步驟才重建出正確任務狀態**」。這需要真實 LLM 迴圈（part-003.2 報告的 threats-to-validity 已誠實標註「無 LLM = proxy」）。
+觸發條件：出現 A（無狀態重建）在真實長任務上**可重現的失敗**（對齊 MEM-17：A 沒失敗就維持 A）→ 才重啟 B 實驗，並套用新指標。
+**MEM 對齊**：不改 B/C/D 候選狀態；只更新未來實驗的量測方法。報告見 `docs/ECC-TASK-CAPSULE-REPORT-zh.md`，證據見 `.omo/evidence/task-13-ecc-task-capsule-experiment-summary.{json,csv}`。
+
+### backlog-032: U 型曲線紀律——記錄「克制規則」的外部實證
+
+Type: idea
+Status: triage
+
+Summary: Engram 論文的 U 型曲線（最佳約 75-80% 計算 / 20-25% 記憶）證明**記憶太多會傷推理**。這直接用數據支持本專案既有的「克制」規則：MEM-08（Capsule 最小化）、MEM-09（warm set 可丟棄）、MEM-10（paging 需證據門檻）、MEM-17（問題觸發才升級）。
+
+行動（低成本、文件層）：在 `docs/MEMORY-zh.md` §5 候選方案處，補一條外部實證註記——「塞更多記憶進 context 會傷推理」有 27B 模型實驗背書，作為未來抗拒『把整個任務歷史全塞進 context』的引用證據。**（註記已落地 2026-07-19，MEMORY-zh.md §5 + MEMORY-en.md §5，CheckMemoryDocs 驗證通過）**
+觸發條件：下次有人（或自己）提議放寬 MEM-08/09/10、或提議自動 paging（方案 D）時 → 引用此項作為反對的實證依據。
+**MEM 對齊**：純文件補強，不改任何契約狀態或實作。
+**注意**：U 型的「75-80/20-25」比例是模型參數預算的分配，**不可直接套用**到本專案（外部記憶無此預算概念）；只借「太多記憶傷推理」的定性結論。

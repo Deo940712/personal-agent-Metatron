@@ -14,7 +14,13 @@ from typing import Any
 
 # ── 常數(§3.1 對照表)────────────────────────────────────────────────
 
-KNOWN_AGENTS = {"schedule", "curator", "librarian", "coding_tracker", "orchestrator"}
+KNOWN_AGENTS = {"schedule", "curator", "librarian", "coding_tracker", "orchestrator",
+                "consolidator"}
+
+# part-007:profile_facet 提案(consolidator 蒸餾偏好 / orchestrator 顯式指示)
+FACET_ACTIONS = {"create", "reinforce", "supersede"}
+FACET_CLASSES = {"preference", "identity", "routine", "workflow",
+                 "veto", "goal", "tooling", "style"}
 
 SCHEDULE_ACTIONS = {"add", "update", "done", "cancel"}
 
@@ -189,11 +195,50 @@ def validate_project_update(payload: dict[str, Any]) -> None:
         raise ProposalError("next_action must be a string <=120 chars")
 
 
+def validate_profile_facet(payload: dict[str, Any]) -> None:
+    """part-007 facet 提案:action/class/key/value/evidence_ids 型別與界限。
+
+    evidence_ids 指向冷儲存 entry_id;「存在於 transcript」的執行期驗證在
+    writer(此處純結構)。supersede 需 supersedes_id(舊 facet rowid)。
+    """
+    action = payload.get("action")
+    if action not in FACET_ACTIONS:
+        raise ProposalError(f"illegal facet action: {action!r} "
+                            f"(allowed: {sorted(FACET_ACTIONS)})")
+
+    facet_class = payload.get("facet_class")
+    if facet_class not in FACET_CLASSES:
+        raise ProposalError(f"illegal facet_class: {facet_class!r}")
+
+    facet_key = payload.get("facet_key")
+    if not isinstance(facet_key, str) or not facet_key.strip() or len(facet_key) > 80:
+        raise ProposalError("facet_key must be non-empty string <=80 chars")
+
+    value = payload.get("value")
+    if not isinstance(value, str) or not value.strip() or len(value) > 500:
+        raise ProposalError("value must be non-empty string <=500 chars")
+
+    evidence_ids = payload.get("evidence_ids")
+    if not isinstance(evidence_ids, list) or not evidence_ids \
+            or not all(isinstance(e, str) and ":" in e for e in evidence_ids):
+        raise ProposalError(
+            "evidence_ids must be a non-empty list of transcript entry ids "
+            "(namespace:id, e.g. 'evt:123')")
+    if len(evidence_ids) > 50:
+        raise ProposalError("evidence_ids list too long (>50)")
+
+    if action == "supersede":
+        old_id = payload.get("supersedes_id")
+        if isinstance(old_id, bool) or not isinstance(old_id, int) or old_id <= 0:
+            raise ProposalError("supersede requires positive int supersedes_id")
+
+
 PAYLOAD_VALIDATORS = {
     "schedule_change": validate_schedule_change,
     "task_change": validate_task_change,
     "classify_note": validate_classify_note,
     "project_update": validate_project_update,
+    "profile_facet": validate_profile_facet,
     # future: agent_note / vault_maintenance
 }
 
@@ -220,4 +265,8 @@ def needs_confirmation(proposal: Proposal) -> bool:
         # 免確認(part-005 DESIGN):唯讀訊號推導的 Working State 快取,
         # 錯了無副作用、下輪自動修正、手動 project_set 永遠優先
         return False
+    if proposal.proposal_type == "profile_facet":
+        # create/reinforce 免確認:知識層累積,可 forget 逆轉、pin 硬覆蓋;
+        # supersede 需確認:§3.2 閘門「supersede 既有筆記」屬需確認層
+        return proposal.payload.get("action") == "supersede"
     return True  # 未知類型保守處理(實際上 validate 已擋)

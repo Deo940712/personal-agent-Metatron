@@ -135,6 +135,106 @@ def apply_project_update(p: P.Proposal, db: Path | None = None) -> Result:
     return Result("applied", f"project {p.target} updated")
 
 
+def apply_facet(p: P.Proposal, db: Path | None = None,
+                transcript_dir: Path | None = None) -> Result:
+    """profile_facet 落地(part-007-slice-001)。
+
+    驗證(欄位級,§3.1 精神):
+    - evidence_ids 每條存在於冷儲存 transcript(不得虛構來源;同 consolidation 規則)
+    - create:同 class+key 不得已有 active(要換值走 supersede,不靜默覆蓋)
+    - reinforce:目標必須 active 且非 forgotten(資料層雙防線之上再擋一層)
+    - supersede:舊 facet 真實、active、未被取代、非 pinned(Mneme 規則)
+    """
+    from core import transcript
+
+    payload = p.payload
+    action = payload["action"]
+    desc = f"profile_facet({action})"
+
+    # 不得虛構來源:evidence_ids 逐條驗證存在於 transcript
+    _, missing = transcript.read_by_ids(transcript_dir, payload["evidence_ids"])
+    if missing:
+        return _reject(db, desc,
+                       f"evidence_ids not found in transcript: {missing[:3]}")
+
+    facet_class, facet_key = payload["facet_class"], payload["facet_key"]
+    existing = stm.facet_get_active(db, facet_class, facet_key)
+
+    if action == "create":
+        if existing is not None:
+            return _reject(db, desc,
+                           f"active facet already exists: {facet_class}/{facet_key} "
+                           f"#{existing['id']} (use reinforce or supersede)",
+                           target=f"facet:{existing['id']}")
+        row_id = stm.facet_insert(db, facet_class, facet_key, payload["value"],
+                                  confidence=p.confidence,
+                                  evidence_ids=payload["evidence_ids"])
+        stm.event_append(db, "writer", "state_change",
+                         f"facet create {facet_class}/{facet_key} by {p.agent}",
+                         target=f"facet:{row_id}")
+        return Result("applied", f"facet #{row_id} created (provisional)", row_id)
+
+    if action == "reinforce":
+        if existing is None:
+            return _reject(db, desc,
+                           f"no active facet to reinforce: {facet_class}/{facet_key}")
+        if existing["user_state"] == "pinned":
+            # pinned = 使用者裁決;累積證據無意義(評分無效化),直接拒絕以免假象
+            return _reject(db, desc, "facet is pinned; scoring is void",
+                           target=f"facet:{existing['id']}")
+        ok = stm.facet_touch_evidence(db, existing["id"], payload["evidence_ids"],
+                                      confidence=p.confidence)
+        if not ok:
+            return _reject(db, desc, f"facet #{existing['id']} not reinforceable",
+                           target=f"facet:{existing['id']}")
+        # 升級判定:純函數 detector;promote 條件到了就地升級
+        from core import facets as F
+        row = stm.facet_get(db, existing["id"])
+        assessment = F.assess_row(row)
+        promoted = (assessment.decision == "promote"
+                    and stm.facet_promote(db, existing["id"], assessment.stability))
+        stm.event_append(db, "writer", "state_change",
+                         f"facet reinforce {facet_class}/{facet_key} "
+                         f"({'promoted to stable' if promoted else 'accumulating'}) "
+                         f"by {p.agent}",
+                         target=f"facet:{existing['id']}")
+        return Result("applied",
+                      f"facet #{existing['id']} reinforced"
+                      f"{' → stable' if promoted else ''}", existing["id"])
+
+    # supersede:舊 facet → superseded,新值建 active
+    old_id = payload["supersedes_id"]
+    old = stm.facet_get(db, old_id)
+    if old is None:
+        return _reject(db, desc, f"supersede target not found: facet#{old_id}")
+    if old["state"] not in ("provisional", "stable"):
+        return _reject(db, desc,
+                       f"supersede target not active: facet#{old_id} "
+                       f"state={old['state']}", target=f"facet:{old_id}")
+    if old["user_state"] == "pinned":
+        return _reject(db, desc, f"facet#{old_id} is pinned; user must unpin first",
+                       target=f"facet:{old_id}")
+    if (old["facet_class"], old["facet_key"]) != (facet_class, facet_key):
+        return _reject(db, desc,
+                       f"supersede class/key mismatch: facet#{old_id} is "
+                       f"{old['facet_class']}/{old['facet_key']}",
+                       target=f"facet:{old_id}")
+    # 先讓位(釋放 unique active 槽)再建新——同一交易語義由順序保證:
+    # supersede 失敗即中止;insert 失敗時舊 facet 已標記,由 events 可稽核恢復
+    if not stm.facet_supersede_mark(db, old_id):
+        return _reject(db, desc, f"facet#{old_id} could not be superseded",
+                       target=f"facet:{old_id}")
+    row_id = stm.facet_insert(db, facet_class, facet_key, payload["value"],
+                              confidence=p.confidence,
+                              evidence_ids=payload["evidence_ids"])
+    stm.facet_link_supersede(db, old_id, row_id)
+    stm.event_append(db, "writer", "state_change",
+                     f"facet supersede {facet_class}/{facet_key} "
+                     f"#{old_id} → #{row_id} by {p.agent}",
+                     target=f"facet:{row_id}")
+    return Result("applied", f"facet #{old_id} superseded by #{row_id}", row_id)
+
+
 def _apply_change(db: Path | None, p: P.Proposal) -> Result:
     table = _TABLE[p.proposal_type]
     action = p.payload["action"]
@@ -236,6 +336,14 @@ def precheck(raw: dict | P.Proposal, db: Path | None = None) -> PrecheckResult:
             reason = f"project not registered: {p.target!r}"
             _reject(db, desc, reason)
             return PrecheckResult(False, False, None, reason=reason)
+    elif p.proposal_type == "profile_facet":
+        # target = 'facet:<class>/<key>' 描述性定址;真實性驗證(active 存在/
+        # evidence 屬實/supersede 目標)在 apply_facet(執行期 DB+transcript 查驗)
+        expected = f"facet:{p.payload.get('facet_class')}/{p.payload.get('facet_key')}"
+        if p.target != expected:
+            reason = f"target must be {expected!r}, got {p.target!r}"
+            _reject(db, desc, reason)
+            return PrecheckResult(False, False, None, reason=reason)
     elif p.payload.get("action") != "add":   # schedule/task:DB rowid(add 例外='new')
         if not p.target.isdigit():
             reason = f"target must be a row id for {p.payload.get('action')}: {p.target!r}"
@@ -270,11 +378,13 @@ def confirm_and_apply(proposal_dict: dict, db: Path | None = None) -> Result:
     pre = precheck(proposal_dict, db)
     if not pre.ok:
         return Result("rejected", f"revalidation failed: {pre.reason}")
-    return _apply_change(db, pre.proposal)
+    return apply_validated(pre.proposal, db)
 
 
 def apply_validated(p: P.Proposal, db: Path | None = None) -> Result:
     """落地一個剛通過 precheck 的 Proposal(同步 CLI 用:precheck 與落地間無空窗)。"""
+    if p.proposal_type == "profile_facet":
+        return apply_facet(p, db)
     return _apply_change(db, p)
 
 

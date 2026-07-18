@@ -55,6 +55,11 @@ ADVICE_DEDUP_WINDOW_DAYS = 3                    # 同 dedup_key 幾天內不重�
 ADVICE_DEFAULT_TTL_DAYS = 3                     # advice 預設過期天數(LLM 未給時)
 ADVICE_PUSH_MIN_PRIORITY = "medium"            # 只主動推 medium/high(low 查詢時才顯示)
 
+# ── 情境演練 crowd-scenario(part-010;vendored 黑箱,subprocess 隔離) ────
+# vendored src 路徑(PYTHONPATH);pin commit 見 skills/crowd_scenario_vendor/VENDORED.md。
+CROWD_SCENARIO_SRC = Path(__file__).parent / "skills" / "crowd_scenario_vendor" / "src"
+SCENARIO_DEFAULT_N = 24                          # 每次演練 persona 數(成本控制)
+
 # ── 知識偵察 scout(part-008;網路內容=不受信任資料,非指令) ────────────
 # allowlist:只准這些網域(含子網域)抓取;不在清單 = fail-closed 拒絕。
 # 空清單 = 全拒(必須顯式加入信任來源才能研究)。起步用穩定 RSS/結構化來源。

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crowd-scenario"
+version = "0.2.0"
+description = "A deterministic, firewalled, domain-pluggable crowd-scenario rehearsal engine (persona packs: Taiwan retail investors, product launch, or your own)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Silavater" }]
+keywords = ["scenario", "crowd", "consensus", "Taiwan", "narrative", "non-authoritative", "ETF"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Office/Business :: Financial",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "hypothesis>=6.0"]
+
+[project.scripts]
+crowdscenario = "crowdscenario.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crowdscenario"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]

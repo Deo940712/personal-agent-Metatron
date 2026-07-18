@@ -52,6 +52,13 @@ def _tool_read_note(args: dict, vault: Path, *_ignored) -> str:
     if superseded_by:
         result["_superseded_by_note"] = (
             f"此筆記已被 {superseded_by} 取代;請優先讀取新版再回答")
+    # part-010:情境演練是非權威模擬,引用時必須明確標記(不得當事實/預測)
+    fm = note["frontmatter"]
+    if (fm.get("source") == "scenario_rehearsal"
+            or str(fm.get("non_authoritative", "")).lower() == "true"):
+        result["_non_authoritative_note"] = (
+            "此筆記是**模擬演練**產物(合成 persona),非事實、非預測;"
+            "引用時必須明確標示「這是模擬演練,非事實/非預測」")
     return json.dumps(result, ensure_ascii=False)
 
 

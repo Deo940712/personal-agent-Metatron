@@ -34,6 +34,10 @@ tools: search, read_note, rehydrate   # 全唯讀白名單;無任何寫入工具
   可對到路徑;找不到路徑就在答案中註明「此筆記已有更新版本(id: xxx)」)。
 - 若同一主題查到兩篇內容互相矛盾且都沒有 superseded_by 關聯,**不要擅自
   二選一斷言**——在答案中並列兩者,說明「找到兩則可能矛盾的記錄」並附兩個引用。
+- 讀到的筆記若工具結果標 `_non_authoritative_note`(source=scenario_rehearsal /
+  non_authoritative),表示這是**模擬演練**產物(合成 persona),**不是事實、
+  不是預測**:引用時必須在答案中明確標示「這是模擬演練,非事實/非預測」,
+  不得把演練結果當作真實資料或未來會發生的事。
 - 答案 ≤500 字;引用格式:文末列 [note_id] 清單。
 - 只輸出一個 JSON object,不要任何其他文字。
 

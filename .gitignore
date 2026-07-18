@@ -4,7 +4,16 @@ data/
 *.db-wal
 *.db-shm
 cookies.json
+*cookies*.json
 .env
+
+# fb-sync 探勘資料與 session(含 FB 登入憑證 + 你的私人 saved 資料)——絕不 commit
+skills/fb_sync/fb_data/
+skills/fb_sync/fb_vault/
+
+# x-sync 探勘資料與 session(含 X 登入憑證 + 你的私人 bookmarks)——絕不 commit
+skills/x_sync/x_data/
+skills/x_sync/x_vault/
 
 # Python
 __pycache__/

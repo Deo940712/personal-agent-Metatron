@@ -241,6 +241,26 @@ def job_track(db: Path | None = None) -> int:
         return 2
 
 
+def job_scout(db: Path | None = None) -> int:
+    """知識偵察入口(part-008;委派 scout.run)。
+
+    只在觸發條件成立時抓(watchlist 到期 / goal 知識缺口);抓來知識落 inbox,
+    由 curate job 評分入庫。網路內容是不受信任資料,經 allowlist + 污染標籤 +
+    curator 隔離 + writer 驗證才進知識庫。
+    """
+    from core import scout                       # 延遲 import:remind 路徑不載
+    run_id = _run_start(db, "scheduler")
+    try:
+        stats = scout.run(db=db)
+        _run_finish(db, run_id, "ok", summary=f"scout {stats}")
+        print(f"OK: {stats}")
+        return 0
+    except Exception as e:                        # noqa: BLE001 — 頂層防線
+        _run_finish(db, run_id, "error", error=f"{type(e).__name__}: {e}")
+        print(f"ERROR: {e}")
+        return 2
+
+
 def job_advise(db: Path | None = None,
                notify_fn: Callable[[str], None] = print) -> int:
     """主動建議入口(part-009;委派 advisor.tick + push)。
@@ -271,7 +291,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m core.agent", description=__doc__)
     parser.add_argument("text", nargs="?", default=None, help="自然語言指令")
     parser.add_argument("--job",
-                        choices=["remind", "consolidate", "curate", "track", "advise"],
+                        choices=["remind", "consolidate", "curate", "track",
+                                 "advise", "scout"],
                         default=None, help="排程 job")
     parser.add_argument("--db", type=Path, default=None)
     parser.add_argument("--yes", action="store_true", help="跳過確認(測試/腳本用)")
@@ -287,6 +308,8 @@ def main(argv: list[str] | None = None) -> int:
         return job_track(args.db)
     if args.job == "advise":
         return job_advise(args.db)
+    if args.job == "scout":
+        return job_scout(args.db)
     if not args.text:
         parser.error("需要自然語言指令或 --job")
     # 裂縫1:CLI 走統一入口 application.invoke,同步 confirm(給 confirm_fn)。

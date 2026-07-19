@@ -41,10 +41,20 @@ def _obj(props: dict, required: list[str] | None = None) -> dict:
 # ── 開發迴圈工具 ─────────────────────────────────────────────────────
 
 def _h_dev_status(args: dict, *, db: Path | None, _api=None) -> dict:
-    """三源綜合:opencode.db session + beacon CURRENT + git。容錯。"""
+    """三源綜合:opencode.db session + beacon CURRENT + git。容錯。
+
+    project 解析(part-012 修可用性):
+    - 已註冊專案名 → 用其 repo_path
+    - 否則若 project 本身是存在的目錄路徑 → 直接掃該路徑(免先註冊)
+    掃描全容錯(git/beacon/opencode 各自失敗回 None,不 crash)。
+    """
+    from pathlib import Path as _Path
+
     project = args.get("project")
     rows = stm.project_show(db, project)
     repo = rows[0].get("repo_path") if rows else None
+    if not repo and project and _Path(project).is_dir():
+        repo = project                            # 未註冊 → 直接吃路徑
     sources: dict = {"opencode": None, "beacon": None, "git": None}
     if repo:
         sources["opencode"] = octools.project_activity(repo, db_path=None)
@@ -53,6 +63,11 @@ def _h_dev_status(args: dict, *, db: Path | None, _api=None) -> dict:
     text = f"專案 {project or '(all)'}:"
     if rows:
         text += f" phase={rows[0].get('phase') or '-'}"
+    elif sources["git"]:
+        g = sources["git"]
+        text += f" branch={g.get('branch', '?')} 最新:{str(g.get('last_message', ''))[:40]}"
+    elif sources["beacon"]:
+        text += f" beacon={sources['beacon'].get('status', '?')}"
     return {"ok": True, "project": project, "sources": sources, "text": text}
 
 

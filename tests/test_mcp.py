@@ -148,3 +148,20 @@ def test_dev_status_no_crash(db, tmp_path):
     result = T.call("dev_status", {"project": "my-agent"}, db=db)
     assert result["ok"] is True
     assert "sources" in result                            # 三源結構
+
+
+def test_dev_status_accepts_direct_path(db, tmp_path):
+    """part-012 修:project 直接傳路徑(未註冊)也能查——git/beacon 掃該路徑。"""
+    # tmp_path 不是 git repo,但 handler 應嘗試掃描而非因未註冊直接跳過
+    result = T.call("dev_status", {"project": str(tmp_path)}, db=db)
+    assert result["ok"] is True
+    assert "sources" in result
+    # repo 有解析到(不是 None)——三源都被嘗試(即使掃描結果為 None)
+    assert result["project"] == str(tmp_path)
+
+
+def test_dev_status_registered_name_still_works(db, tmp_path):
+    """已註冊專案名仍走 repo_path(向後相容)。"""
+    stm.project_set(db, "reg-proj", phase="p1", repo_path=str(tmp_path))
+    result = T.call("dev_status", {"project": "reg-proj"}, db=db)
+    assert result["ok"] is True and "phase=p1" in result["text"]

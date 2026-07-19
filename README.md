@@ -197,6 +197,7 @@ python -m pytest tests/ -q     # 852 tests
 
 | ��� | ���e |
 |---|---|
+| **[docs/USER-GUIDE-zh.md](docs/USER-GUIDE-zh.md)** | **使用手冊(怎麼用:Discord/CLI/儀表板/MCP/排程/疑難排解)** |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | �t�γ]�p�v��(schema�B�y�{�ϡB�]�p�̾�) |
 | [INTERFACES.md](INTERFACES.md) | �����h�]�p(CLI/Discord/����O/MCP) |
 | [docs/TOOLS.md](docs/TOOLS.md) | ��O�u��Bagent�B�����B�v���P�x�s�t��x�} |

@@ -24,6 +24,34 @@ def api(text):
     return lambda s, u, m, j: text
 
 
+def _boom_api(*_a, **_k):
+    raise AssertionError("fast-path must not call the LLM")
+
+
+# ── part-015-slice-001:三層下鑽快徑(零 LLM)────────────────────────
+
+
+def test_drilldown_fast_paths_are_zero_llm(tmp_path, db):
+    from core import ltm, vindex
+
+    vault = tmp_path / "vault"
+    idx_db = tmp_path / "index.db"
+    ltm.init_vault(vault)
+    nid = ltm.write_note(
+        vault, "semantic", title="Claude 心得", body="下鑽內容",
+        frontmatter={"source": "manual", "tags": ["claude"], "summary": "s"},
+        ts=1_800_000_000)
+    vindex.upsert(idx_db, nid, title="Claude 心得", summary="s", tags=["claude"])
+
+    kw = dict(db=db, vault=vault, idx_db=idx_db, _api=_boom_api)
+    # L2:看 <tag> → 列筆記(不打 LLM)
+    r_topic = chat.handle_message("看 claude", **kw)
+    assert "Claude 心得" in r_topic.text and nid in r_topic.text
+    # L3:看筆記 <id> → 內容(不打 LLM)
+    r_note = chat.handle_message(f"看筆記 {nid}", **kw)
+    assert "下鑽內容" in r_note.text
+
+
 # ── 階段1 → pending → 階段2 ─────────────────────────────────────────
 
 def test_schedule_two_stage_approve(db):

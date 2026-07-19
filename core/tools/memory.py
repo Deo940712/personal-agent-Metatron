@@ -43,7 +43,61 @@ def list_knowledge(context: CapabilityContext) -> CapabilityResult:
         lines.extend(f"  {tag} × {n}" for tag, n in top_tags)
     lines.append("\n最近幾篇:")
     lines.extend(f"  · {e['title']}" for e in recent)
+    if top_tags:
+        lines.append(f"\n輸入「看 <主題>」下鑽,例如「看 {top_tags[0][0]}」。")
     return CapabilityResult("\n".join(lines), outcome="answered")
+
+
+def browse_topic(tag: str, context: CapabilityContext) -> CapabilityResult:
+    """part-015 三層下鑽 L2:列某主題(tag)下的筆記標題 + id(確定性,零 LLM)。
+
+    走向量索引 notes_by_tag 找 id,再對 registry 補標題;最多列前 20 篇 + 提示
+    下一步「看筆記 <id>」。無狀態下鑽(每層獨立指令)。
+    """
+    from core import ltm, vindex
+
+    vault = context.vault or config.VAULT_PATH
+    idx_db = context.idx_db or config.INDEX_DB
+
+    ids = vindex.notes_by_tag(idx_db, tag, limit=20)
+    if not ids:
+        return CapabilityResult(
+            f"主題「{tag}」下沒有筆記。用「瀏覽知識庫」看有哪些主題。",
+            outcome="no_result")
+
+    by_id = {e["id"]: e for e in ltm.registry_entries(vault)}
+    lines = [f"主題「{tag}」下的筆記(前 {len(ids)} 篇):"]
+    for nid in ids:
+        title = by_id[nid]["title"] if nid in by_id else nid
+        lines.append(f"  · {title}  —  {nid}")
+    lines.append("\n輸入「看筆記 <id>」看內容,例如「看筆記 " + ids[0] + "」。")
+    return CapabilityResult("\n".join(lines), outcome="answered")
+
+
+def open_note(note_id: str, context: CapabilityContext) -> CapabilityResult:
+    """part-015 三層下鑽 L3:開一篇筆記看內容(確定性,零 LLM)。
+
+    走 registry 找路徑(fallback semantic/),讀 frontmatter 摘要 + 內文。
+    """
+    from core import ltm
+
+    vault = context.vault or config.VAULT_PATH
+    entry = next((e for e in ltm.registry_entries(vault) if e["id"] == note_id), None)
+    rel_path = entry["path"] if entry else f"semantic/{note_id}.md"
+    note = ltm.read_note(vault, rel_path)
+    if note is None:
+        return CapabilityResult(
+            f"找不到筆記「{note_id}」。用「看 <主題>」列出該主題筆記再挑。",
+            outcome="no_result")
+
+    fm = note["frontmatter"]
+    title = fm.get("title", note_id)
+    tags = fm.get("tags", [])
+    tag_str = " ".join(tags) if isinstance(tags, list) else str(tags)
+    header = f"# {title}  ({note_id})"
+    if tag_str:
+        header += f"\n主題:{tag_str}"
+    return CapabilityResult(f"{header}\n\n{note['body']}", outcome="answered")
 
 
 def query(text: str, context: CapabilityContext) -> CapabilityResult:

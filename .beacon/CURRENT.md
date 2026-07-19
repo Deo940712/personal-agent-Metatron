@@ -2,18 +2,20 @@
 
 Status: executing
 Part: part-015（知識庫 CRUD + 三層下鑽 + INDEX 中文化）
-Slice: part-015-slice-000（INDEX 中文化 + ltm.delete_note 原語）
+Slice: part-015-slice-002（知識庫 CRUD：note_write proposal + writer + router）
 
 Design authority: `.beacon/parts/part-015/DESIGN.md`
 Slice map: `.beacon/parts/part-015/TODO.md`
-Baseline: 899 tests green
+Baseline: 907 tests green（slice-000 +3、slice-001 +5)
 
-## slice-000 scope（in progress）
+## 進度
 
-- INDEX.md `_INDEX_TEMPLATE` 說明中文化（tag 保持英文）+ 既有 vault INDEX 遷移
-- `ltm.delete_note(vault, note_id, idx_db)` 原語（三處刪 + 回 content_hash）；
-  `tools/delete_note.py` 改呼叫它
-- tests：INDEX 中文斷言、delete_note 三處刪 + 回 hash、既有 delete 工具仍過
+- ✅ slice-000：INDEX 中文化 + `ltm.delete_note` 原語（生產 vault 已遷移,807
+  registry 保留）
+- ✅ slice-001：三層下鑽（`browse_topic`/`open_note` + `vindex.notes_by_tag`
+  + 快徑「看 <tag>」「看筆記 <id>」零 LLM）
+- ▶ slice-002（in progress）：CRUD note_write proposal + writer 三 action
+  + router note_create/note_edit/note_delete + Discord 分派,全走確認
 
 ## Context
 

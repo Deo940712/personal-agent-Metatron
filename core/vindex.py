@@ -97,6 +97,31 @@ def all_tags(idx_db: Path) -> list[str]:
         con.close()
 
 
+def notes_by_tag(idx_db: Path, tag: str, limit: int = 20) -> list[str]:
+    """part-015:列出帶指定 tag 的 note_id(精確 token 比對)——三層下鑽 L2 用。
+
+    tags 是空白分隔字串;用 word-boundary LIKE 避免 'ai' 誤中 'ai-agents'。
+    零檔案 I/O,不掃 vault。壞/缺 → 空。
+    """
+    if not tag.strip():
+        return []
+    con = _connect(idx_db)
+    try:
+        out: list[str] = []
+        for note_id, raw in con.execute(
+                "SELECT note_id, tags FROM notes_fts WHERE tags LIKE ? LIMIT ?",
+                (f"%{tag}%", limit * 4)):
+            if raw and tag in raw.split():        # 精確 token(非子字串)
+                out.append(note_id)
+                if len(out) >= limit:
+                    break
+        return out
+    except Exception:                             # noqa: BLE001 — 索引衍生物容錯
+        return []
+    finally:
+        con.close()
+
+
 def _has_long_token(query: str) -> bool:
     """trigram MATCH 需要 ≥3 字元的連續 token(中英皆然)。"""
     return any(len(tok) >= 3 for tok in query.split()) or len(query.replace(" ", "")) >= 3

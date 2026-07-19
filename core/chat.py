@@ -80,6 +80,18 @@ def handle_message(text: str, *, channel_ref: str | None = None,
                 break
         return _reply(memory_tools.query(query, context))
 
+    # 三層下鑽快徑(part-015):看筆記 <id> = L3;看 <tag> = L2。零 LLM。
+    # 「看筆記」須先於「看」判斷(前綴重疊)。
+    if stripped.startswith("看筆記 ") or stripped.startswith("看筆記"):
+        note_id = stripped[len("看筆記"):].strip()
+        if not note_id:
+            return Reply("用法:看筆記 <id>(id 從「看 <主題>」的清單取得)")
+        return _reply(memory_tools.open_note(note_id, context))
+    if stripped.startswith("看 "):
+        tag = stripped[2:].strip()
+        if tag:
+            return _reply(memory_tools.browse_topic(tag, context))
+
     if low in ("today", "今天"):
         return _reply(schedule_tools.today(context))
     if low in ("week", "本週"):

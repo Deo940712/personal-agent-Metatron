@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from core import ltm, stm, transcript
+from core import ltm, stm, transcript, vindex
 from core.tools import catalog, memory, projects, schedule, tasks
 from core.tools.contracts import CapabilityContext, CapabilityResult, Permission
 
@@ -190,3 +190,72 @@ def test_memory_rehydrate_reads_raw_sources(tmp_path: Path) -> None:
 
     # Then: the typed result exposes the raw entry without adding a write path.
     assert result.entries[0]["payload"]["text"] == "原始內容"
+
+
+# ── part-015-slice-001:三層下鑽檢索(主題→筆記→內容)────────────────
+
+
+def _seed_notes(vault: Path, idx_db: Path) -> list[str]:
+    """建三篇筆記(兩篇 claude、一篇 misc)+ 索引,回 note_id 清單。"""
+    ids = []
+    for i, (title, tag) in enumerate(
+        [("Claude Code 心得", "claude"), ("Claude 3.5 筆記", "claude"),
+         ("雜項一則", "misc")]
+    ):
+        nid = ltm.write_note(
+            vault, "semantic", title=title, body=f"內容 {i}",
+            frontmatter={"source": "manual", "tags": [tag],
+                         "summary": f"{title} 摘要"}, ts=1_800_000_000 + i)
+        vindex.upsert(idx_db, nid, title=title, summary=f"{title} 摘要", tags=[tag])
+        ids.append(nid)
+    return ids
+
+
+def test_browse_topic_lists_notes_for_tag(tmp_path: Path) -> None:
+    # Given: three notes, two tagged claude.
+    vault = tmp_path / "vault"
+    idx_db = tmp_path / "index.db"
+    ltm.init_vault(vault)
+    _seed_notes(vault, idx_db)
+
+    # When: browsing the claude topic.
+    result = memory.browse_topic("claude", CapabilityContext(vault=vault, idx_db=idx_db))
+
+    # Then: it lists the two claude notes with ids, and not the misc one.
+    assert result.outcome == "answered"
+    assert "Claude Code 心得" in result.text
+    assert "Claude 3.5 筆記" in result.text
+    assert "雜項一則" not in result.text
+    assert "看筆記" in result.text          # 下一步提示
+
+
+def test_browse_topic_unknown_tag_is_empty(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    idx_db = tmp_path / "index.db"
+    ltm.init_vault(vault)
+    _seed_notes(vault, idx_db)
+    result = memory.browse_topic("nonexistent", CapabilityContext(vault=vault, idx_db=idx_db))
+    assert result.outcome == "no_result"
+
+
+def test_open_note_returns_content(tmp_path: Path) -> None:
+    # Given: a seeded note.
+    vault = tmp_path / "vault"
+    idx_db = tmp_path / "index.db"
+    ltm.init_vault(vault)
+    ids = _seed_notes(vault, idx_db)
+
+    # When: opening one note by id.
+    result = memory.open_note(ids[0], CapabilityContext(vault=vault, idx_db=idx_db))
+
+    # Then: it shows the title and body.
+    assert result.outcome == "answered"
+    assert "Claude Code 心得" in result.text
+    assert "內容 0" in result.text
+
+
+def test_open_note_missing_id(tmp_path: Path) -> None:
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    result = memory.open_note("20250101-nope", CapabilityContext(vault=vault))
+    assert result.outcome == "no_result"

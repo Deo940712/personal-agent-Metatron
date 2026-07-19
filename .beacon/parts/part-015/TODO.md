@@ -33,19 +33,21 @@ Done gate: INDEX 中文 + delete_note 原語測綠;全綠
 
 ### part-015-slice-001: 三層下鑽檢索(主題→筆記→內容)
 
-Status: planned
+Status: DONE（907 tests green）
 
 Goal: browse_topic + open_note 能力 + router/快徑接線。逐層點進知識。
 
 Candidate scope:
-- [ ] `core/tools/memory.py`：`browse_topic(tag, context)`(列該 tag 前 20 篇
-      標題+id,走 vindex FTS/registry)、`open_note(note_id, context)`(讀該篇
-      frontmatter 摘要 + 內文)
-- [ ] `core/chat.py`：快徑「看 <tag>」「看筆記 <id>」直達(零 LLM);
+- [x] `core/tools/memory.py`：`browse_topic(tag, context)`(列該 tag 前 20 篇
+      標題+id,走 vindex.notes_by_tag + registry)、`open_note(note_id, context)`
+      (讀該篇 frontmatter 摘要 + 內文)
+- [x] `core/vindex.py`：`notes_by_tag(idx_db, tag, limit)`(精確 token 比對)
+- [x] `core/chat.py`：快徑「看 <tag>」「看筆記 <id>」直達(零 LLM);
       list_knowledge 尾加「輸入『看 <主題>』下鑽」提示
-- [ ] router(選配):browse_topic/open_note intent 作為自然語 fallback
-- [ ] tests：browse_topic 列筆記、open_note 讀內容、快徑零 LLM、下鑽三層串起、
-      list_knowledge 提示
+- [~] router intent(選配)：暫不做——快徑已覆蓋明確指令,slice-002 若加自然語
+      再評估
+- [x] tests：browse_topic 列筆記/未知 tag 空、open_note 讀內容/缺 id、快徑零 LLM
+      (test_tools.py +4、test_chat.py +1)
 
 Files-scope: core/tools/memory.py, core/chat.py, tests/test_tools.py,
 tests/test_router_wiring.py

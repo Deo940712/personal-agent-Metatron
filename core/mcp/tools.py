@@ -71,6 +71,39 @@ def _h_dev_status(args: dict, *, db: Path | None, _api=None) -> dict:
     return {"ok": True, "project": project, "sources": sources, "text": text}
 
 
+def _h_dev_plan(args: dict, *, db: Path | None, _api=None) -> dict:
+    """讀某專案最近 OpenCode session 的 todo(plan)進度。唯讀 opencode.db。
+
+    project 解析同 dev_status:註冊名 → repo_path,或直接吃存在的路徑。
+    """
+    from pathlib import Path as _Path
+
+    project = args.get("project")
+    rows = stm.project_show(db, project)
+    repo = rows[0].get("repo_path") if rows else None
+    if not repo and project and _Path(project).is_dir():
+        repo = project
+    sessions = octools.recent_sessions(repo, limit=3) if repo else []
+    plans = []
+    for s in sessions:
+        todos = octools.session_todos(s["id"])
+        plans.append({"session_id": s["id"], "title": s.get("title", ""),
+                      **todos})
+    if not plans:
+        text = f"專案 {project or '(all)'}:沒有找到 OpenCode session 的 plan/todo。"
+    else:
+        lines = [f"專案 {project} 的最近開發 plan:"]
+        for p in plans:
+            lines.append(f"\n[{p['title'] or p['session_id'][:12]}] "
+                         f"{p['completed']}/{p['total']} 完成"
+                         f"(進行中 {p['in_progress']}):")
+            for it in p["items"]:
+                mark = {"completed": "✔", "in_progress": "▶"}.get(it["status"], "·")
+                lines.append(f"  {mark} {it['content']}")
+        text = "\n".join(lines)
+    return {"ok": True, "project": project, "plans": plans, "text": text}
+
+
 def _h_session_tail(args: dict, *, db: Path | None, _api=None) -> dict:
     sid = args.get("session_id", "")
     n = int(args.get("n", 5))
@@ -148,6 +181,8 @@ def _register(tool: Tool) -> None:
 
 _register(Tool("dev_status", "讀某專案的開發進度(opencode session + beacon + git 三源)",
                _obj({"project": {"type": "string"}}), _h_dev_status))
+_register(Tool("dev_plan", "讀某專案最近 OpenCode session 的 plan/todo 進度",
+               _obj({"project": {"type": "string"}}), _h_dev_plan))
 _register(Tool("session_tail", "讀某 OpenCode session 最後 n 則對話摘要",
                _obj({"session_id": {"type": "string"}, "n": {"type": "integer"}},
                     ["session_id"]), _h_session_tail))

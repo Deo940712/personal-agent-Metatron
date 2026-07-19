@@ -165,3 +165,48 @@ def test_dev_status_registered_name_still_works(db, tmp_path):
     stm.project_set(db, "reg-proj", phase="p1", repo_path=str(tmp_path))
     result = T.call("dev_status", {"project": "reg-proj"}, db=db)
     assert result["ok"] is True and "phase=p1" in result["text"]
+
+
+# ── dev_plan:讀 OpenCode session todo 進度(part-014)────────────────────
+
+def test_dev_plan_registered(db, tmp_path, monkeypatch):
+    from core import octools
+    stm.project_set(db, "myp", phase="p1", repo_path=str(tmp_path))
+    monkeypatch.setattr(octools, "recent_sessions",
+                        lambda d, **k: [{"id": "ses_1", "title": "做 X 功能",
+                                         "updated_at": 1}])
+    monkeypatch.setattr(octools, "session_todos",
+                        lambda sid, **k: {"total": 5, "completed": 3,
+                                          "in_progress": 1,
+                                          "items": [{"content": "步驟 A",
+                                                     "status": "completed"}]})
+    r = T.call("dev_plan", {"project": "myp"}, db=db)
+    assert r["ok"] is True
+    assert "做 X 功能" in r["text"]
+    assert "3/5" in r["text"]                              # 進度
+
+
+def test_dev_plan_direct_path(db, tmp_path, monkeypatch):
+    """未註冊 → 直接傳路徑(同 dev_status fallback)。"""
+    from core import octools
+    monkeypatch.setattr(octools, "recent_sessions", lambda d, **k: [])
+    r = T.call("dev_plan", {"project": str(tmp_path)}, db=db)
+    assert r["ok"] is True
+    assert r["project"] == str(tmp_path)
+
+
+def test_dev_plan_no_session_no_crash(db, tmp_path, monkeypatch):
+    from core import octools
+    stm.project_set(db, "empty-proj", phase="p1", repo_path=str(tmp_path))
+    monkeypatch.setattr(octools, "recent_sessions", lambda d, **k: [])
+    r = T.call("dev_plan", {"project": "empty-proj"}, db=db)
+    assert r["ok"] is True and "沒有" in r["text"]
+
+
+def test_dev_plan_in_tool_list():
+    from channels import mcp_stdio
+    resp = mcp_stdio.handle_request(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    names = [t["name"] for t in resp["result"]["tools"]]
+    assert "dev_plan" in names
+    assert len(names) == 11                                # 10 + dev_plan

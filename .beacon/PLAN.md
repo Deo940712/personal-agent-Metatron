@@ -45,9 +45,11 @@
 | part-011 | **done** (2026-07-19) | **收尾接線**（closing-loop，非 backlog MiroFish）：作息 completed 事件 → routine facet → advisor 偏離（死程式碼 extract_routine 復活）+ advisor 校準降頻 + world-diff new_knowledge 訊號 + golden queries 回歸（backlog-007）+ 文件全同步；852 tests 綠、三 slice QA 通過 | `.beacon/parts/part-011/DESIGN.md` | `.beacon/done/part-011/` |
 | part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
 | part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
+| part-014 | **done** (2026-07-19) | **MCP dev_plan + 儀表板常駐**：dev_plan 工具（第 11 MCP 工具，讀 OpenCode session 的 plan/todo 進度）+ 儀表板設 ONSTART 常駐（127.0.0.1:7777，內網反代對外）；899 tests、dev_plan 真機讀到 part-011 session 7/7 todo | `.beacon/parts/part-014/DESIGN.md` | `.beacon/done/part-014/` |
 | part-011 | backlog | **MiroFish optional adapter**（大型社會模擬，有實際需求才做）：opt-in 外部隔離 sandbox；Metatron 只輸出去識別化 scenario package（問題/角色/公開背景，不含私人原文）；MiroFish 永不讀寫 DB1/vault/transcript；報告回來標「模擬/非事實/非預測」；AGPL + Zep Cloud 依賴 → 隔離不入核心 | 見 backlog-028 | — |
 | part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
 | part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
+| part-014 | **done** (2026-07-19) | **MCP dev_plan + 儀表板常駐**：dev_plan 工具（第 11 MCP 工具，讀 OpenCode session 的 plan/todo 進度）+ 儀表板設 ONSTART 常駐（127.0.0.1:7777，內網反代對外）；899 tests、dev_plan 真機讀到 part-011 session 7/7 todo | `.beacon/parts/part-014/DESIGN.md` | `.beacon/done/part-014/` |
 
 ## Success Criteria
 

@@ -36,6 +36,8 @@ function Remove-Jobs {
         cmd /c "schtasks /Delete /TN $name /F >nul 2>&1"
         Write-Host "removed (if existed): $name"
     }
+    cmd /c "schtasks /Delete /TN $TaskPrefix-dashboard /F >nul 2>&1"   # part-014
+    Write-Host "removed (if existed): $TaskPrefix-dashboard"
 }
 
 if ($Remove) { Remove-Jobs; exit 0 }
@@ -57,7 +59,16 @@ foreach ($j in $Jobs) {
     Write-Host "registered: $name ($($j.Desc))"
 }
 
+# 儀表板常駐(part-014):開機自啟,綁 127.0.0.1:7777(唯讀後台管理;內網反代對外)
+$DashName = "$TaskPrefix-dashboard"
+$DashRunner = Join-Path $PSScriptRoot "run_dashboard.cmd"
+cmd /c "schtasks /Delete /TN $DashName /F >nul 2>&1"
+$dtr = '\"' + $DashRunner + '\"'
+cmd /c "schtasks /Create /TN $DashName /TR `"$dtr`" /SC ONSTART /RL LIMITED /F >nul"
+if ($LASTEXITCODE -eq 0) { Write-Host "registered: $DashName (唯讀儀表板 127.0.0.1:7777,開機自啟)" }
+
 Write-Host ""
 Write-Host "全部註冊完成。檢查:schtasks /Query /TN MyAgent-remind"
+Write-Host "儀表板:現在啟動 → schtasks /Run /TN MyAgent-dashboard;開 http://127.0.0.1:7777"
 Write-Host "健康檢查:python -m core.stm --db C:\Users\tcart\my-agent-data\state.db advices list"
 Write-Host "(回來後設 MY_AGENT_LLM_API_KEY User 環境變數,LLM jobs 自動恢復)"

@@ -247,6 +247,36 @@
         }
       }
     },
+    "part-012": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_router.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "With a real LLM key set, run core.router.classify on '明天有什麼' / '我存過哪些 RAG' / '哈囉' / '明天下午兩點開會' / gibberish and confirm intents are schedule_query(+date_range) / knowledge / smalltalk / schedule_write / unclear respectively.",
+            "Confirm a bad date_range (start>end or a hallucinated 2099 date) degrades schedule_query to unclear rather than querying, and that an LLM failure returns FALLBACK without raising."
+          ]
+        },
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_router_wiring.py tests/test_chat.py tests/test_application.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-000"
+          ],
+          "manualQa": [
+            "On Discord (real bot): send '明天有什麼' (lists tomorrow), '我存過哪些 RAG 相關的做法?' (recall answers or honest not_found with a real vault), '最近有什麼建議' (advices), '哈囉' (natural greeting + today count), and a vague sentence (friendly clarifying question). Then '明天下午兩點開會' still shows preview + ✅ button and lands on confirm.",
+            "Confirm fast paths (今天 / done N) never call the router LLM, and that if the primary model returns an empty response recall retries on LLM_MODEL_FALLBACK and completes."
+          ]
+        }
+      }
+    },
     "part-010": {
       "slices": {
         "slice-000": {

@@ -1,49 +1,37 @@
 ﻿# CURRENT
 
-Status: active
-Part: part-012（對話式 orchestrator）
-Slice: part-012-slice-001 — 接線 chat/application + schedule_query + Discord 開 recall
+Status: planning-only
+Part: (none active)
+Slice: (none promoted)
 
 ## Context
 
-part-012-slice-000 已完成歸檔（`.beacon/done/part-012/`）：router 分類器
-（872 tests；真 LLM 六句全對，「明天」正確分成 schedule_query + 時間窗）。
+part-012（對話式 orchestrator，backlog-033）全兩 slice 完成並歸檔至
+`.beacon/done/part-012/`：
+- slice-000：router 意圖分類器（七 intent，欄位級驗證，LLM 失敗 fallback；886 tests）
+- slice-001：router 接線 chat + schedule_query 時間窗 + Discord 開 recall + unclear
+  友善追問；附帶修 recall 空回應 bug（gpt-5.5 content=null → gemini fallback）
 
-## Goal
+**「感覺是固定程序」的體感問題已解決**：Discord 現在聽得懂「明天有什麼」「我存過
+哪些 X」「最近怎樣」「哈囉」，聽不懂會友善追問——但寫入鐵律完全不變
+（提案→writer→確認）。真機 QA 五句全通。
 
-慢徑改走 router 分派；schedule_query 確定性讀取器；Discord 開 recall；
-unclear 友善追問。快徑（today/done/todo/查）保留零 LLM。寫入紀律不變。
+## 環境就緒狀態
 
-Design authority: `.beacon/parts/part-012/DESIGN.md`
-Slice map: `.beacon/parts/part-012/TODO.md`
+- ✅ LLM（gpt-5.5 內網 proxy + gemini fallback）
+- ✅ Discord bot（指令/兩階段確認/DM 推播/對話式路由/recall）
+- ✅ 排程 6 jobs 自主運行
+- ✅ Tailscale MCP 遠端（實測綁 100.89.45.93 通、綁 0.0.0.0 拒）
+- ⬜ 知識庫目前空——threads 同步或 watchlist 抓過才有料
+- ⬜ threads 真同步 QA（session 存在，未跑）
 
-## Allowed scope
+## Next candidate (NOT promoted — awaits user gate)
 
-- [ ] `core/chat.py`：未命中快徑 → router.classify → 七 intent 分派
-      （schedule_write→現 propose / schedule_query→range 讀取器 / knowledge→recall /
-      advice→advices / status→proj+advices / smalltalk→模板+今日行程數 /
-      unclear→帶猜測追問 / fallback→現行 propose）
-- [ ] `core/tools/schedule.py`：`range_view(start, end)` 確定性查詢
-- [ ] Discord 開 recall：allow_recall 預設 True；INTERFACES.md 內容分級標過時
-- [ ] `core/application.py`：route/outcome 對齊（agent_runs 記 intent）
-- [ ] tests：「明天」回行程、knowledge 進 recall、advice/status/smalltalk/unclear、
-      快徑零 LLM 斷言、寫入仍 preview→confirm、fallback 不中斷
+- threads 真同步（跑一次 skills/runner 把已存貼文灌進知識庫，recall 才有料）
+- 對話層調校：schedule_write 也可考慮走 range 感知；smalltalk 帶 facets 個人化
+- gate-locked backlog（rerank/decay/librarian/MiroFish/AgentSpec）觸發條件未到
 
-Files-scope: core/chat.py, core/application.py, core/tools/schedule.py,
-channels/discord_bot.py, INTERFACES.md, tests/test_chat.py,
-tests/test_application.py, tests/test_router_wiring.py,
-.beacon/parts/part-012/**, .beacon/CURRENT.md
+## Blocked（等使用者環境）
 
-## Forbidden scope
-
-- 第二次 LLM 潤稿呼叫；寫入繞過確認；多輪對話狀態
-
-## Verification target
-
-- Unit: `python -m pytest tests/test_router_wiring.py tests/test_chat.py tests/test_application.py -q`
-- Regression: `python -m pytest tests/ -q`（基線 872）
-- Manual QA: Discord 真機五句 + 排程寫入流程不變
-
-## Done gate
-
-DESIGN Verification Targets 七條全對應；真機 QA 通過；全綠。
+- threads session 真同步實跑
+- VPS（已用內網反代/Tailscale 取代，不需要）

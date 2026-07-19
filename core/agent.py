@@ -318,7 +318,9 @@ def main(argv: list[str] | None = None) -> int:
     confirm = (lambda p: (print(p), True)[1]) if args.yes else _cli_confirm
     ctx = InvocationContext(trigger="cli", allow_recall=True, confirm_fn=confirm)
     result = app_invoke(args.text, ctx, db=args.db)
-    print(result.text)
+    # cp950 console 印不出部分 unicode(如 ✔)→ 降級替換,不讓輸出炸掉已成功的操作
+    print(result.text.encode(sys.stdout.encoding or "utf-8",
+                             errors="replace").decode(sys.stdout.encoding or "utf-8"))
     return 0 if result.outcome in ("applied", "answered", "no_result") else 1
 
 

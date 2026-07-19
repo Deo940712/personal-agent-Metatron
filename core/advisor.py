@@ -37,13 +37,14 @@ class WorldDiff:
     stalled_projects: list[dict] = field(default_factory=list)  # 有 blockers 的專案
     routine_deviation: dict | None = None                       # 作息偏離(part-007)
     stalling_goals: list[dict] = field(default_factory=list)    # 失速 goal facet
+    new_knowledge: int = 0                                      # scout 抓的未評分知識數(part-008)
 
     @property
     def quiet(self) -> bool:
         """無任何值得建議的變化 → quiet tick(零 LLM)。"""
         return not (self.new_schedule or self.overdue_tasks
                     or self.stalled_projects or self.routine_deviation
-                    or self.stalling_goals)
+                    or self.stalling_goals or self.new_knowledge)
 
     def as_summary(self) -> dict:
         return {
@@ -52,6 +53,7 @@ class WorldDiff:
             "stalled_projects": len(self.stalled_projects),
             "routine_deviation": self.routine_deviation is not None,
             "stalling_goals": len(self.stalling_goals),
+            "new_knowledge": self.new_knowledge,
             "quiet": self.quiet,
         }
 
@@ -139,10 +141,24 @@ def _stalling_goals(db: Path | None) -> list[dict]:
             for f in stm.facet_list(db, facet_class="goal")]
 
 
-def observe(db: Path | None, now_ts: int | None = None) -> WorldDiff:
+def _count_new_knowledge(vault: Path | None) -> int:
+    """part-011:scout 抓落 inbox 但尚未 curate 的 external_untrusted 筆記數。
+
+    **count-only**——只數量,不讀內文(防注入:untrusted 內容永不進 advice)。
+    curate 消化後 inbox tag 移除,計數自然歸零。
+    """
+    if vault is None or not vault.exists():
+        return 0
+    from core import curator_pre
+    return sum(1 for n in curator_pre.scan_inbox(vault)
+               if str(n["frontmatter"].get("external_untrusted", "")).lower() == "true")
+
+
+def observe(db: Path | None, now_ts: int | None = None,
+            vault: Path | None = None) -> WorldDiff:
     """確定性 world-diff 讀取器(無 LLM)。回 WorldDiff;quiet 屬性判定短路。
 
-    part-008(Knowledge Scout)未建,「新收知識」訊號暫不接線。
+    vault 給定才計 new_knowledge(scout 未評分知識;count-only 防注入)。
     """
     now = now_ts if now_ts is not None else stm.now()
     since = get_baseline(db)
@@ -154,6 +170,7 @@ def observe(db: Path | None, now_ts: int | None = None) -> WorldDiff:
         stalled_projects=_stalled_projects(db),
         routine_deviation=_routine_deviation(db, since),
         stalling_goals=_stalling_goals(db),
+        new_knowledge=_count_new_knowledge(vault),
     )
 
 
@@ -180,6 +197,9 @@ def _build_reflect_prompt(diff: WorldDiff, db: Path | None) -> str:
         rd = diff.routine_deviation
         lines.append(f"- 作息偏離：平常 {rd['expected_bucket']}，"
                      f"最近 {rd['off_bucket_count']} 筆完成落在其他時段")
+    if diff.new_knowledge:
+        # count-only:只告知數量,不餵 untrusted 內文(防注入)
+        lines.append(f"- 新研究知識：有 {diff.new_knowledge} 則抓來的資料待你檢視分類")
     for g in diff.stalling_goals:
         lines.append(f"- 目標：{g['key']} = {g['value']}")
 
@@ -250,16 +270,18 @@ def reflect(diff: WorldDiff, db: Path | None, _api=None) -> list[dict]:
 
 # ── tick:完整流程(observe → quiet 短路 / reflect → 防疲勞 → 落地)──────
 
-def tick(db: Path | None = None, now_ts: int | None = None, _api=None) -> dict:
+def tick(db: Path | None = None, now_ts: int | None = None, _api=None,
+         vault: Path | None = None) -> dict:
     """一次 advisor tick。回統計 dict。
 
     - quiet(無重要變化)→ 推進 baseline、零 LLM。
     - 有變化 → reflect → 防疲勞過濾(配額/去重)→ 落 advices 表 → 推進 baseline。
     - reflect 失敗(LLMError)→ 不推進 baseline(下次重看同視窗)。
     """
+    import config
     now = now_ts if now_ts is not None else stm.now()
     stm.advice_expire_due(db, now)                 # 先清過期
-    diff = observe(db, now_ts=now)
+    diff = observe(db, now_ts=now, vault=vault or config.VAULT_PATH)
 
     stats = {"quiet": diff.quiet, "world_diff": diff.as_summary(),
              "advices_created": 0, "skipped_quota": 0, "skipped_dedup": 0}
@@ -309,7 +331,21 @@ def push_candidates(db: Path | None, now_ts: int | None = None) -> list[dict]:
     now = now_ts if now_ts is not None else stm.now()
     floor = _PRIORITY_RANK[config.ADVICE_PUSH_MIN_PRIORITY]
     return [a for a in stm.advice_list(db, state="pending", now_ts=now)
-            if _PRIORITY_RANK[a["priority"]] >= floor]
+            if _PRIORITY_RANK[a["priority"]] >= floor
+            and not _is_downthrottled(db, a.get("dedup_key"))]
+
+
+def _is_downthrottled(db: Path | None, dedup_key: str | None) -> bool:
+    """part-011:某 dedup_key 有**穩定** ignore 的 advice_pref facet → 降頻(不推)。
+
+    校準閉環:record_feedback 把 accept/ignore 累積成 preference facet
+    (advice_pref__<dedup>);穩定 ignore = 使用者反覆忽略某類建議 → 停推。
+    保守:僅 stable ignore 才降頻;provisional/accept 照常推。
+    """
+    if not dedup_key:
+        return False
+    facet = stm.facet_get_active(db, "preference", f"advice_pref__{dedup_key}")
+    return bool(facet and facet["state"] == "stable" and facet["value"] == "ignore")
 
 
 def format_advice(advice: dict) -> str:

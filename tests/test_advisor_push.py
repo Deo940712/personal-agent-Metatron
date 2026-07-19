@@ -55,6 +55,45 @@ def test_push_excludes_expired_and_nonpending(env):
     assert ids == {live}
 
 
+# ── todo 5:降頻——穩定 ignore 的 dedup_key 不再推 ─────────────────────
+
+def _stable_ignore_facet(db, dedup):
+    """建一個穩定 ignore 的 advice_pref facet(模擬使用者反覆忽略某類)。"""
+    fid = stm.facet_insert(db, "preference", f"advice_pref__{dedup}", "ignore",
+                           confidence=0.7)
+    stm.facet_promote(db, fid, 0.6)            # → stable
+    return fid
+
+
+def test_push_downthrottles_stable_ignored(env):
+    """某 dedup_key 有穩定 ignore facet → 該類 advice 不再推(降頻)。"""
+    ignored = _add_advice(env["db"], priority="high", dedup="late_night")
+    _stable_ignore_facet(env["db"], "late_night")
+    other = _add_advice(env["db"], priority="high", dedup="overdue")
+    ids = {a["id"] for a in advisor.push_candidates(env["db"], now_ts=T0)}
+    assert other in ids
+    assert ignored not in ids                  # 降頻
+
+
+def test_push_keeps_provisional_ignore(env):
+    """僅 provisional ignore(尚未穩定)→ 仍推(保守:多次忽略才降頻)。"""
+    adv = _add_advice(env["db"], priority="high", dedup="k")
+    stm.facet_insert(env["db"], "preference", "advice_pref__k", "ignore",
+                     confidence=0.5)           # provisional,未 promote
+    ids = {a["id"] for a in advisor.push_candidates(env["db"], now_ts=T0)}
+    assert adv in ids
+
+
+def test_push_keeps_stable_accept(env):
+    """穩定 accept facet → 照常推(降頻只針對 ignore)。"""
+    adv = _add_advice(env["db"], priority="high", dedup="useful")
+    fid = stm.facet_insert(env["db"], "preference", "advice_pref__useful", "accept",
+                           confidence=0.7)
+    stm.facet_promote(env["db"], fid, 0.6)
+    ids = {a["id"] for a in advisor.push_candidates(env["db"], now_ts=T0)}
+    assert adv in ids
+
+
 # ── job 接線 ─────────────────────────────────────────────────────────
 
 def test_job_advise_pushes_via_notify(env):

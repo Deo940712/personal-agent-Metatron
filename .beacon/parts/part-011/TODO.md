@@ -30,14 +30,14 @@ Done gate: extract_routine 有 caller；端到端 routine loop 測綠；全綠
 
 ### part-011-slice-001: advisor 降頻 + world-diff 知識訊號（todo 5-6）
 
-Status: planned
-
-Goal: 校準閉環收尾 + part-008↔009 接線。
+Status: done (2026-07-19; snapshot: `.beacon/done/part-011/part-011-slice-001-done-current.md`)
+826 tests 綠（基線 820 + 6）；降頻 + new_knowledge manual QA 通過。
 
 Candidate scope:
-- [ ] todo 5：`advisor.push_candidates` 過濾穩定 ignore 的 dedup_key
-- [ ] todo 6：`advisor.observe` world-diff 加 new_knowledge（scout untrusted inbox
-      count-only，防注入）
+- [x] todo 5：`advisor.push_candidates` + `_is_downthrottled` 過濾穩定 ignore 的
+      dedup_key（校準閉環閉合）
+- [x] todo 6：`advisor.observe` world-diff new_knowledge（scout untrusted inbox
+      count-only，防注入；observe/tick 加 vault 參數）
 
 Files-scope: core/advisor.py, tests/test_advisor.py, tests/test_advisor_push.py
 

@@ -186,3 +186,42 @@ def test_observe_is_deterministic(db):
     d1 = advisor.observe(db, now_ts=T0)
     d2 = advisor.observe(db, now_ts=T0)
     assert d1.as_summary() == d2.as_summary()
+
+
+# ── todo 6:world-diff new_knowledge 訊號(scout untrusted inbox count-only)──
+
+def test_observe_new_knowledge_from_scout_inbox(db, tmp_path, monkeypatch):
+    import config
+    from core import scout
+    from skills.web_fetch import FetchedEntry
+    vault = tmp_path / "vault"
+    monkeypatch.setattr(config, "SCOUT_ALLOWLIST_DOMAINS", ["arxiv.org"])
+    for i in range(2):
+        scout.fetch_and_land(
+            db, vault, "https://arxiv.org/rss", f"topic{i}",
+            lambda url, i=i: [FetchedEntry(url=f"https://arxiv.org/abs/{i}",
+                                           title=f"paper{i}", author="a",
+                                           body="b", published="")],
+            now_ts=T0)
+    diff = advisor.observe(db, now_ts=T0, vault=vault)
+    assert diff.new_knowledge == 2
+    assert diff.quiet is False
+    assert diff.as_summary()["new_knowledge"] == 2
+
+
+def test_observe_new_knowledge_ignores_trusted(db, tmp_path):
+    from core import ltm
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    # 一般(非 external_untrusted)inbox 筆記不算 new_knowledge
+    ltm.write_note(vault, "semantic", title="自己的", body="x",
+                   frontmatter={"source": "manual", "tags": ["inbox"],
+                                "summary": "s"}, ts=T0)
+    diff = advisor.observe(db, now_ts=T0, vault=vault)
+    assert diff.new_knowledge == 0
+
+
+def test_observe_no_vault_no_knowledge(db):
+    """未給 vault(或 vault 不存在)→ new_knowledge 0,不炸。"""
+    diff = advisor.observe(db, now_ts=T0)
+    assert diff.new_knowledge == 0

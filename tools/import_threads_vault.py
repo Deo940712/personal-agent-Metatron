@@ -36,6 +36,22 @@ from core import curator_pre, ltm, vindex  # noqa: E402
 SRC_VAULT = REPO / "skills" / "threads_sync_vendor" / "vault"
 
 
+BLACKLIST_FILE = ".deleted_hashes.txt"
+
+
+def _load_blacklist(vault: Path) -> set[str]:
+    """讀刪除黑名單(vault/.deleted_hashes.txt);缺檔 → 空。"""
+    path = vault / BLACKLIST_FILE
+    if not path.exists():
+        return set()
+    out: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            out.add(line)
+    return out
+
+
 def _parse_date_ts(fm: dict) -> int:
     """frontmatter date(YYYY-MM-DD HH:mm)→ epoch;缺/壞 → now。"""
     raw = str(fm.get("date", "")).strip()
@@ -60,6 +76,10 @@ def main(argv: list[str] | None = None) -> int:
     ltm.init_vault(dst_vault)
     idx_db = config.INDEX_DB
 
+    # 刪除黑名單(content_hash;你手動刪過的貼文不會因重跑復活)。
+    # 一行一個 hash;# 開頭是註解。刪某篇後把它的 content_hash 加進來即可。
+    blacklist = _load_blacklist(dst_vault)
+
     # 既有 content_hash 集合(去重)——讀 agent vault semantic 現有筆記
     seen_hashes: set[str] = set()
     for md in (dst_vault / "semantic").glob("*.md"):
@@ -69,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
 
     src_notes = sorted((SRC_VAULT).glob("*.md"))
     stats = {"total": len(src_notes), "imported": 0, "skipped_dupe": 0,
-             "skipped_bad": 0, "attachments": 0}
+             "skipped_blacklist": 0, "skipped_bad": 0, "attachments": 0}
 
     (dst_vault / "attachments").mkdir(parents=True, exist_ok=True)
 
@@ -80,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
             continue
         body = note["body"]
         h = curator_pre.content_hash(body)
+        if h in blacklist:
+            stats["skipped_blacklist"] += 1     # 手動刪過的,不復活
+            continue
         if h in seen_hashes:
             stats["skipped_dupe"] += 1
             continue

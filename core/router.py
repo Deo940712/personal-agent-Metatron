@@ -15,8 +15,8 @@ from pathlib import Path
 
 from core import stm
 
-INTENTS = ("schedule_write", "schedule_query", "knowledge", "advice",
-           "status", "smalltalk", "unclear")
+INTENTS = ("schedule_write", "schedule_query", "knowledge", "knowledge_list",
+           "advice", "status", "directive", "smalltalk", "unclear")
 
 # date_range 合理界限：過去/未來各一年內（擋 LLM 幻覺日期如 1970/2099）
 _RANGE_LIMIT_DAYS = 366

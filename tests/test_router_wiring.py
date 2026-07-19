@@ -133,6 +133,67 @@ def test_unclear_no_guess_gives_examples(db):
     assert "明天有什麼" in r.text                # 給例句,不是說明書口吻
 
 
+# ── part-013:knowledge_list + directive ──────────────────────────────
+
+def test_knowledge_list_intent(db, tmp_path):
+    from core import ltm, vindex
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    idx = tmp_path / "idx.db"
+    for i, (title, tag) in enumerate([("RAG 筆記", "rag-knowledge"),
+                                       ("Claude 心得", "claude"),
+                                       ("另一篇 RAG", "rag-knowledge")]):
+        nid = ltm.write_note(vault, "semantic", title=title, body="內文",
+                             frontmatter={"source": "threads", "tags": [tag],
+                                          "summary": title}, ts=T0 + i)
+        vindex.upsert(idx, nid, title=title, summary=title, tags=[tag])
+    r = chat.handle_message("我知識庫有什麼", db=db, vault=vault, idx_db=idx,
+                            _api=_route_api({"intent": "knowledge_list",
+                                             "argument": ""}))
+    assert "3 篇" in r.text                      # 總數
+    assert "rag-knowledge × 2" in r.text         # tag 統計
+    assert r.pending_id is None                  # 唯讀,不觸發寫入
+
+
+def test_knowledge_list_zero_llm_after_router(db, tmp_path):
+    """list_knowledge 本身不再打 LLM(router 一次分類後,列表是確定性)。"""
+    from core import ltm
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    calls = {"n": 0}
+
+    def api(s, u, m, j):
+        calls["n"] += 1
+        return json.dumps({"intent": "knowledge_list", "argument": ""})
+    chat.handle_message("知識庫列表", db=db, vault=vault, _api=api)
+    assert calls["n"] == 1                        # 只有 router 那一次
+
+
+def test_directive_intent_queues(db):
+    stm.project_set(db, "my-agent", phase="p1", repo_path="/x")
+    r = chat.handle_message("留個指令:修 dev_status", db=db, _api=_route_api(
+        {"intent": "directive", "argument": "修 dev_status"}))
+    assert "已記下" in r.text
+    pending = stm.directive_list(db, status="pending")
+    assert len(pending) == 1
+    assert pending[0]["text"] == "修 dev_status"
+    assert pending[0]["project"] == "my-agent"
+
+
+def test_directive_no_project_uses_general(db):
+    r = chat.handle_message("下次記得跑測試", db=db, _api=_route_api(
+        {"intent": "directive", "argument": "下次記得跑測試"}))
+    assert "general" in r.text
+    assert stm.directive_list(db, project="general", status="pending")
+
+
+def test_directive_empty_asks(db):
+    r = chat.handle_message("留個指令", db=db, _api=_route_api(
+        {"intent": "directive", "argument": ""}))
+    assert "什麼" in r.text
+    assert stm.directive_list(db, status="pending") == []
+
+
 # ── 快徑零 LLM ───────────────────────────────────────────────────────
 
 def test_fast_path_today_zero_llm(db):

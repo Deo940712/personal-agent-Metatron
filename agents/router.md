@@ -19,8 +19,13 @@ tools: none
 - `schedule_query`：想**查**行程/待辦（問有什麼，不是要建立）。
   例：「明天有什麼」「下週三我有事嗎」「這週末有安排嗎」
   → 必須附 `date_range`：[起, 迄] ISO 日期（含頭含尾）。「明天」= 明天到明天。
-- `knowledge`：想從知識庫查資料/筆記/以前存過的東西。
+- `knowledge`：想從知識庫**問答**——找特定資料/筆記/以前存過的東西。
   例：「我存過哪些 RAG 做法」「之前那篇講 sqlite-vec 的筆記」「幫我查向量檢索」
+- `knowledge_list`：想**瀏覽/總覽**知識庫有什麼（不是問特定問題，是想看全貌）。
+  例：「我知識庫有什麼」「知識庫列表」「有哪些主題」「最近存了什麼」「總覽一下」
+- `directive`：想留一個**開發指令**給下次開發 session（不是排行程，是開發任務）。
+  例：「留個指令：修 dev_status」「下次記得跑測試」「提醒下次 session 做 X」
+  → argument = 指令內容。
 - `advice`：想看系統的建議/提醒總覽。
   例：「有什麼建議」「我最近該注意什麼」
 - `status`：想知道近況/專案狀態的總覽。
@@ -42,7 +47,7 @@ tools: none
 
 輸出 schema：
 {
-  "intent": "schedule_write" | "schedule_query" | "knowledge" | "advice" | "status" | "smalltalk" | "unclear",
+  "intent": "schedule_write" | "schedule_query" | "knowledge" | "knowledge_list" | "advice" | "status" | "directive" | "smalltalk" | "unclear",
   "argument": string,
   "date_range": [string, string]?,     // 只在 schedule_query
   "guess": [string]?                    // 只在 unclear
@@ -73,6 +78,14 @@ ASSISTANT: {"intent": "advice", "argument": ""}
 USER: 今天日期:2026-07-19
 訊息:專案進度怎樣
 ASSISTANT: {"intent": "status", "argument": ""}
+
+USER: 今天日期:2026-07-19
+訊息:我知識庫有什麼
+ASSISTANT: {"intent": "knowledge_list", "argument": ""}
+
+USER: 今天日期:2026-07-19
+訊息:留個指令:下次修 dev_status 的顯示
+ASSISTANT: {"intent": "directive", "argument": "修 dev_status 的顯示"}
 
 USER: 今天日期:2026-07-19
 訊息:早安!

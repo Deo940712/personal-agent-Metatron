@@ -79,6 +79,24 @@ def upsert(idx_db: Path, note_id: str, *, title: str, summary: str,
         con.close()
 
 
+def all_tags(idx_db: Path) -> list[str]:
+    """part-013:列出所有筆記的 tags(展平,含重複)——供知識庫總覽 tag 統計。
+
+    從 notes_fts 讀(tags 空白分隔);零檔案 I/O,不掃 vault。壞/缺 → 空。
+    """
+    con = _connect(idx_db)
+    try:
+        out: list[str] = []
+        for (raw,) in con.execute("SELECT tags FROM notes_fts"):
+            if raw:
+                out.extend(t for t in raw.split() if t)
+        return out
+    except Exception:                             # noqa: BLE001 — 索引衍生物容錯
+        return []
+    finally:
+        con.close()
+
+
 def _has_long_token(query: str) -> bool:
     """trigram MATCH 需要 ≥3 字元的連續 token(中英皆然)。"""
     return any(len(tok) >= 3 for tok in query.split()) or len(query.replace(" ", "")) >= 3

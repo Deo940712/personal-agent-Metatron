@@ -34,6 +34,8 @@ def _api(payload: dict):
 @pytest.mark.parametrize("payload,expected_intent", [
     ({"intent": "schedule_write", "argument": "明天兩點開會"}, "schedule_write"),
     ({"intent": "knowledge", "argument": "RAG 做法"}, "knowledge"),
+    ({"intent": "knowledge_list", "argument": ""}, "knowledge_list"),
+    ({"intent": "directive", "argument": "修 dev_status"}, "directive"),
     ({"intent": "advice", "argument": ""}, "advice"),
     ({"intent": "status", "argument": ""}, "status"),
     ({"intent": "smalltalk", "argument": "早安"}, "smalltalk"),

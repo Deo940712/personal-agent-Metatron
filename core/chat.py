@@ -25,8 +25,9 @@ from core.tools.contracts import CapabilityContext, CapabilityResult
 # 確認逾時(DESIGN §4.4:10 分鐘)
 CONFIRM_TTL_SECONDS = 600
 
-# 深度知識查詢關鍵詞 → 拒絕(§4.1 內容分級:知識不經 Discord)
-_KNOWLEDGE_PREFIXES = ("查", "search", "recall", "找筆記", "知識")
+# 明確知識查詢快徑前綴(直達 recall)。part-013:移除過廣的「知識」——
+# 「知識庫列表」「知識庫有什麼」該由 router 分成 knowledge_list,不能被快徑吃掉。
+_KNOWLEDGE_PREFIXES = ("查 ", "search ", "recall ", "找筆記")
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +114,20 @@ def _dispatch_routed(text: str, context: CapabilityContext, *,
         if not allow_recall:
             return Reply("知識庫查詢在此介面未開放。")
         return _reply(memory_tools.query(route.argument or text, context))
+
+    if route.intent == "knowledge_list":
+        return _reply(memory_tools.list_knowledge(context))
+
+    if route.intent == "directive":
+        instruction = route.argument.strip()     # 只用 router 抽出的指令內容
+        if not instruction:
+            return Reply("要留什麼開發指令?說一下內容我幫你記給下次 session。")
+        # 留給註冊專案首個;無則 'general'。directive 無副作用(只入佇列),免確認。
+        projects = stm.project_show(context.db)
+        project = projects[0]["name"] if projects else "general"
+        stm.directive_add(context.db, project, instruction)
+        return Reply(f"已記下開發指令(專案 {project}):{instruction}\n"
+                     f"下次 session 開場會讀到。")
 
     if route.intent == "advice":
         return Reply(_advices_digest(context.db))

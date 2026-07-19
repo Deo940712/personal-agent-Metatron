@@ -44,8 +44,10 @@
 | part-010 | designed | **crowd-scenario integration**（情境演練）：vendored 釘版（第二個 vendored 黑箱，同 threads-sync）+ subprocess CLI 呼叫；Metatron 產去識別化 bucket seed → 子行程演練 → advisory 報告存 vault，標 non-authoritative；新增個人 domain packs（personal_schedule / habit_change / project_portfolio） | `.beacon/parts/part-010/DESIGN.md` | 待 slice |
 | part-011 | **done** (2026-07-19) | **收尾接線**（closing-loop，非 backlog MiroFish）：作息 completed 事件 → routine facet → advisor 偏離（死程式碼 extract_routine 復活）+ advisor 校準降頻 + world-diff new_knowledge 訊號 + golden queries 回歸（backlog-007）+ 文件全同步；852 tests 綠、三 slice QA 通過 | `.beacon/parts/part-011/DESIGN.md` | `.beacon/done/part-011/` |
 | part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
+| part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
 | part-011 | backlog | **MiroFish optional adapter**（大型社會模擬，有實際需求才做）：opt-in 外部隔離 sandbox；Metatron 只輸出去識別化 scenario package（問題/角色/公開背景，不含私人原文）；MiroFish 永不讀寫 DB1/vault/transcript；報告回來標「模擬/非事實/非預測」；AGPL + Zep Cloud 依賴 → 隔離不入核心 | 見 backlog-028 | — |
 | part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
+| part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
 
 ## Success Criteria
 

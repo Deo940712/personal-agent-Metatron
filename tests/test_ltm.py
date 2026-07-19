@@ -3,7 +3,7 @@ registry/壞檔不炸)。"""
 
 import pytest
 
-from core import ltm
+from core import ltm, vindex
 
 TS = 1_752_300_000  # 2025-07
 
@@ -85,3 +85,61 @@ def test_registry_skips_garbage_lines(vault):
                    frontmatter={"source": "consolidation", "tags": ["daily-log"],
                                 "summary": "s"}, ts=TS)
     assert len(ltm.registry_entries(vault)) == 1           # 垃圾行不擋解析
+
+
+# ── part-015-slice-000:INDEX 中文化 ──────────────────────────────────
+
+
+def test_index_template_explanatory_text_is_chinese(vault):
+    """INDEX.md 說明文字中文化(part-015);tag 清單保持英文(系統識別碼)。"""
+    text = (vault / "INDEX.md").read_text(encoding="utf-8")
+    # 標題/說明中文
+    assert "知識庫" in text
+    assert "使用方式" in text or "用法" in text
+    assert "受控" in text
+    # tag 仍英文(受控詞彙表不動)
+    assert "`daily-log`" in text and "`rag-knowledge`" in text
+    # controlled_tags 仍讀得到(執行期真相解析未壞)
+    tags = ltm.controlled_tags(vault)
+    assert "daily-log" in tags and "rag-knowledge" in tags
+
+
+# ── part-015-slice-000:ltm.delete_note 原語 ─────────────────────────
+
+
+def test_delete_note_removes_file_registry_and_returns_hash(vault, tmp_path):
+    """delete_note 三處刪(vault 檔 / registry / 索引)+ 回 content_hash。"""
+    idx_db = tmp_path / "index.db"
+    nid = ltm.write_note(
+        vault, "semantic", title="待刪筆記", body="這是要刪的內容。",
+        frontmatter={"source": "manual", "tags": ["misc"], "summary": "待刪"}, ts=TS)
+    # 建索引一筆(FTS + map),模擬真實入庫
+    vindex.upsert(idx_db, nid, title="待刪筆記", summary="待刪", tags=["misc"])
+    assert (vault / "semantic" / f"{nid}.md").exists()
+    assert any(e["id"] == nid for e in ltm.registry_entries(vault))
+
+    result = ltm.delete_note(vault, nid, idx_db)
+
+    assert result["file"] is True
+    assert result["registry"] == 1
+    assert result["index"] is True
+    assert result["content_hash"]                          # 回 hash(供黑名單)
+    # 三處都清了
+    assert not (vault / "semantic" / f"{nid}.md").exists()
+    assert not any(e["id"] == nid for e in ltm.registry_entries(vault))
+    con = vindex._connect(idx_db)
+    try:
+        assert con.execute("SELECT 1 FROM note_map WHERE note_id=?", (nid,)).fetchone() is None
+        assert con.execute("SELECT 1 FROM notes_fts WHERE note_id=?", (nid,)).fetchone() is None
+    finally:
+        con.close()
+
+
+def test_delete_note_missing_file_is_safe(vault, tmp_path):
+    """刪不存在的筆記不炸;file=False、content_hash=None。"""
+    idx_db = tmp_path / "index.db"
+    vindex._connect(idx_db).close()                        # 建空索引 schema
+    result = ltm.delete_note(vault, "20250101-nonexistent", idx_db)
+    assert result["file"] is False
+    assert result["content_hash"] is None
+    assert result["registry"] == 0

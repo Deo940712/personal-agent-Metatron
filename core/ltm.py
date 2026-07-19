@@ -28,16 +28,16 @@ INITIAL_TAGS = [
     "ai-agent", "coding",
 ]
 
-_INDEX_TEMPLATE = """# Knowledge Base — Index
+_INDEX_TEMPLATE = """# 知識庫 — 索引
 
-## How to use (for agents)
-1. 先讀本 index,依一行描述挑 1-3 篇打開;不掃全庫。
+## 使用方式(給 agent)
+1. 先讀本索引,依一行描述挑 1-3 篇打開;不掃全庫。
 2. 引用資訊時附筆記 id。
 
-## Controlled tags
+## 受控標籤(controlled tags,系統識別碼,保持英文)
 {tags}
 
-## Registry
+## 索引清單(registry)
 """
 
 _REGISTRY_LINE = re.compile(
@@ -218,6 +218,60 @@ def mark_superseded(vault: Path, old_id: str, new_id: str) -> bool:
     fm["superseded_by"] = new_id
     update_note_frontmatter(vault, entry["path"], fm)
     return True
+
+
+def delete_note(vault: Path, note_id: str, idx_db: Path) -> dict:
+    """乾淨刪一篇筆記(part-015):三處刪 + 回 content_hash(供黑名單)。
+
+    三處 = 向量索引(note_map/notes_vec/notes_fts)、INDEX registry 那一行、
+    vault 檔案。刪檔前先算 content_hash 回傳,呼叫端據此加黑名單(防重跑復活)。
+    append-only 管的是「事實層不改寫」;明確的刪除是使用者職權,走 writer 確認。
+
+    回 {note_id, file, registry, index, content_hash}。
+    刪不存在的筆記安全:file=False、content_hash=None。
+    """
+    from core import curator_pre, vindex  # 延遲載入,避開循環
+
+    result: dict = {"note_id": note_id, "file": False, "registry": 0,
+                    "index": False, "content_hash": None}
+
+    # content_hash(刪檔前先算)——先找 registry 拿路徑,fallback semantic/
+    entry = next((e for e in registry_entries(vault) if e["id"] == note_id), None)
+    rel_path = entry["path"] if entry else f"semantic/{note_id}.md"
+    md = vault / rel_path
+    if md.exists():
+        note = read_note(vault, rel_path)
+        if note:
+            result["content_hash"] = curator_pre.content_hash(note["body"])
+
+    # 1. 向量索引
+    con = vindex._connect(idx_db)
+    try:
+        rid = con.execute("SELECT rowid FROM note_map WHERE note_id=?",
+                          (note_id,)).fetchone()
+        if rid:
+            con.execute("DELETE FROM notes_vec WHERE rowid=?", (rid[0],))
+            con.execute("DELETE FROM note_map WHERE note_id=?", (note_id,))
+        con.execute("DELETE FROM notes_fts WHERE note_id=?", (note_id,))
+        con.commit()
+        result["index"] = bool(rid)
+    finally:
+        con.close()
+
+    # 2. INDEX registry(刪掉含該 id 的行)
+    index = vault / "INDEX.md"
+    if index.exists():
+        lines = index.read_text(encoding="utf-8").splitlines()
+        kept = [ln for ln in lines if note_id not in ln]
+        result["registry"] = len(lines) - len(kept)
+        index.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+    # 3. vault 檔案
+    if md.exists():
+        md.unlink()
+        result["file"] = True
+
+    return result
 
 
 def read_note(vault: Path, rel_path: str) -> dict | None:

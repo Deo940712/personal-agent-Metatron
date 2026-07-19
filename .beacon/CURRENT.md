@@ -1,8 +1,19 @@
 ﻿# CURRENT
 
-Status: planning-only
-Part: (none active)
-Slice: (none promoted)
+Status: executing
+Part: part-015（知識庫 CRUD + 三層下鑽 + INDEX 中文化）
+Slice: part-015-slice-000（INDEX 中文化 + ltm.delete_note 原語）
+
+Design authority: `.beacon/parts/part-015/DESIGN.md`
+Slice map: `.beacon/parts/part-015/TODO.md`
+Baseline: 899 tests green
+
+## slice-000 scope（in progress）
+
+- INDEX.md `_INDEX_TEMPLATE` 說明中文化（tag 保持英文）+ 既有 vault INDEX 遷移
+- `ltm.delete_note(vault, note_id, idx_db)` 原語（三處刪 + 回 content_hash）；
+  `tools/delete_note.py` 改呼叫它
+- tests：INDEX 中文斷言、delete_note 三處刪 + 回 hash、既有 delete 工具仍過
 
 ## Context
 

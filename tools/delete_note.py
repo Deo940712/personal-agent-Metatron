@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 import config  # noqa: E402
-from core import curator_pre, ltm, vindex  # noqa: E402
+from core import ltm  # noqa: E402
 
 BLACKLIST_FILE = ".deleted_hashes.txt"
 
@@ -44,46 +44,12 @@ def _resolve(vault: Path, note_id: str | None, match: str | None) -> list[str]:
 
 
 def _delete(vault: Path, note_id: str) -> dict:
-    """三處刪除 + 黑名單。回統計。"""
-    md = vault / "semantic" / f"{note_id}.md"
-    result = {"note_id": note_id, "file": False, "registry": 0,
-              "index": False, "blacklisted": None}
+    """三處刪除(復用 ltm.delete_note)+ 黑名單。回統計。"""
+    result = ltm.delete_note(vault, note_id, config.INDEX_DB)
+    result["blacklisted"] = None
 
-    # content_hash(刪檔前先算,加黑名單用)
-    content_hash = None
-    if md.exists():
-        note = ltm.read_note(vault, f"semantic/{note_id}.md")
-        if note:
-            content_hash = curator_pre.content_hash(note["body"])
-
-    # 1. 向量索引(vindex._connect 會 load vec0)
-    con = vindex._connect(config.INDEX_DB)
-    try:
-        rid = con.execute("SELECT rowid FROM note_map WHERE note_id=?",
-                          (note_id,)).fetchone()
-        if rid:
-            con.execute("DELETE FROM notes_vec WHERE rowid=?", (rid[0],))
-            con.execute("DELETE FROM note_map WHERE note_id=?", (note_id,))
-        con.execute("DELETE FROM notes_fts WHERE note_id=?", (note_id,))
-        con.commit()
-        result["index"] = bool(rid)
-    finally:
-        con.close()
-
-    # 2. INDEX registry
-    index = vault / "INDEX.md"
-    if index.exists():
-        lines = index.read_text(encoding="utf-8").splitlines()
-        kept = [ln for ln in lines if note_id not in ln]
-        result["registry"] = len(lines) - len(kept)
-        index.write_text("\n".join(kept) + "\n", encoding="utf-8")
-
-    # 3. vault 檔案
-    if md.exists():
-        md.unlink()
-        result["file"] = True
-
-    # 4. 黑名單(防重跑復活)
+    # 黑名單(防重跑復活)——工具層職權,不進 ltm 原語
+    content_hash = result.get("content_hash")
     if content_hash:
         bl = vault / BLACKLIST_FILE
         existing = bl.read_text(encoding="utf-8") if bl.exists() else ""

@@ -42,9 +42,11 @@ Summary: 已定案——**自寫薄層**：單次 chat.completions 呼叫 + agen
 ### backlog-007: 記憶可靠性測試基建
 
 Type: test-gap
-Status: triage
+Status: in-progress (2026-07-19，part-011 todo 8)
 
 Summary: golden queries 回歸測試（20-30 條檢索測例）+ consolidation 的 ADD/UPDATE/SKIP 三態決策測試 + LLM 決策欄位級驗證測試 + rehydrate 回水路徑測試。隨 part-003 一起設計。
+
+**進度（part-011 todo 8）**：golden queries harness 已落地——`tests/test_golden_queries.py`（15 筆種子筆記跨主題 + 24 條 query→expected-hit 斷言 + 負向鑑別力測試，確定性、零 LLM/網路，測 `retrieve.search` index+FTS 層）。改索引/檢索邏輯必跑。consolidation ADD/UPDATE/SKIP、欄位級驗證、rehydrate 路徑測試已散在 test_consolidate/test_facets_writer/test_retrieve（既有）。cross-encoder rerank（backlog-025）觸發條件 = 此 harness 出現排名問題。
 
 ### backlog-009: 冷儲存 transcript 層
 

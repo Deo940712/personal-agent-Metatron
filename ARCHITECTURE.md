@@ -631,9 +631,14 @@ vault/
 │   ├── profile/        #   使用者偏好與穩定事實
 │   ├── ops/            #   營運教訓 (平台踩坑、系統經驗)
 │   └── sop/            #   學到的流程 (只顯式保存)
+├── scenarios/          # 情境演練報告 (part-010;非事實層,硬標 non_authoritative)
 ├── _index/             # 分類 MOC (threads-sync 已有)
 └── attachments/        # 圖片落地
 ```
+
+> `scenarios/` 是**非事實層**:crowd-scenario 演練的合成 persona 報告,frontmatter
+> 硬標 `source: scenario_rehearsal` + `non_authoritative: true`;recall 引用時強制
+> 標「模擬演練,非事實/非預測」;不進 semantic、不進 Personal Model facet 證據。
 
 **semantic 筆記**(社交貼文,threads-sync 格式擴充):
 
@@ -909,8 +914,9 @@ my-agent/
 │   ├── scanners.py       ✅ # git_scan + beacon_scan(唯讀、全容錯)
 │   ├── octools.py        ✅ # opencode.db 唯讀讀取器(mode=ro;part-006 dev_status 資料層)
 │   ├── facets.py         ✅ # 個人模型(part-007):stability detector/routine 抽取/vault 投影
-│   ├── advisor.py        ✅ # 主動建議(part-009):world-diff observe/reflect/tick/push/校準回饋
+│   ├── advisor.py        ✅ # 主動建議(part-009):world-diff observe/reflect/tick/push/降頻/校準
 │   ├── scout.py          ✅ # 知識偵察(part-008):allowlist/fetch_and_land/觸發收集/run
+│   ├── scenario.py       ✅ # 情境演練(part-010):bucket firewall/subprocess runner/templates/CLI
 │   ├── tools/            ✅ # 能力層(part-006):catalog/contracts/schedule/tasks/projects/memory
 │   └── mcp/tools.py      ✅ # MCP 工具定義(與傳輸無關):10 工具含 dev_status/directives
 ├── agents/                  # 子 agent 契約:prompt + 輸出 schema + few-shot
@@ -930,12 +936,14 @@ my-agent/
 │   ├── runner.py         ✅ # skill 執行器(五步驟/login_expired 判定/DB1 記錄)
 │   ├── threads_sync_vendor/ ✅ # vendored clone(pin commit;VENDORED.md;零修改黑箱)
 │   ├── web_fetch/        ✅ # 網路抓取(part-008):RSS/Atom stdlib 解析,opener 可注入
+│   ├── crowd_scenario_vendor/ ✅ # vendored(part-010;pin 1b40712a;MIT;零修改黑箱)
 │   ├── x_sync/           🔨 # phase-0 probe 完成(playwright GraphQL 攔截/transform/store+tests)
 │   └── fb_sync/          🔨 # phase-0 probe 完成(saved 清單攔截/transform/store+tests)
 ├── experiments/             # 隔離實驗(不進 core;task_capsule = part-003.2 可丟棄原型)
+├── tools/                ✅ # 排程註冊(schedule_jobs.ps1 / run_job.cmd)
 ├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
 ├── docs/                 ✅ # MEMORY-{zh,en}(記憶契約)/TOOLS(能力矩陣)/ECC 實驗報告
-├── tests/                ✅ # 778 tests
+├── tests/                ✅ # 852 tests
 └── data/                    # (在 DATA_DIR,OneDrive 外,不 commit)
     ├── state.db             # DB1
     ├── index.db             # 向量索引(衍生物)
@@ -966,8 +974,9 @@ flowchart LR
 | 9 | world-diff quiet-tick 零 LLM;有變化產可過期 advice(四重防疲勞);action 走確認;校準回饋成 facet | ✅ 程式面 2026-07-19(真 Discord QA 待 token) |
 | 8 | allowlist fail-closed;抓取帶溯源+external_untrusted;注入內容零寫入;只觸發條件研究;端到端 fetch→curate→recall | ✅ 2026-07-19(真網路抓取 QA 待來源) |
 
-自適應助理層(§15)part-007/008/009 **已實作**。剩 part-010 crowd-scenario 已設計待
-promote,見 §15 與 `.beacon/PLAN.md`。
+自適應助理層(§15)part-007/008/009/010 **全部已實作**。part-011（收尾接線）補完
+跨 part 迴圈:作息 completed 事件 → routine facet → advisor 偏離;advisor 校準降頻;
+world-diff new_knowledge 訊號。見 §15 與 `.beacon/PLAN.md`。
 
 ## 11. 開放決策(實作前定案)
 
@@ -1029,15 +1038,16 @@ promote,見 §15 與 `.beacon/PLAN.md`。
 2. **技能 = 獨立 CLI 管線**:每個功能獨立、idempotent、可單獨執行。core 只做路由 + 讀寫 DB。壞一個不倒全部。
 3. **記憶單向流**:DB1 低健康條目 → 夜間蒸餾 → DB2(append-only)。core 永不直接持有長期記憶,用檢索取用。
 
-## 15. 自適應助理層(part-007/008/009 已實作;part-010 待 promote)
+## 15. 自適應助理層(part-007/008/009/010 全部已實作)
 
 > 目標:讓 Metatron 從「幾條各自成熟的管線」進化成「熟悉你、會主動建議、能演練未來」的
 > 助理——但**不變成 OpenHuman 式常駐自主 agent**。「活」= 定期醒來看變化、產可過期建議、
 > 真實行動仍走確認,不是背景無限自我思考、不是自主改狀態。設計依據見各 part DESIGN。
 >
 > **狀態(2026-07-19)**:Personal Model(part-007)、Knowledge Scout(part-008)、
-> Proactive Advisor(part-009)三塊**已實作**(778 tests,端到端 QA 通過);
-> Scenario Rehearsal(part-010)已設計待 promote。
+> Proactive Advisor(part-009)、Scenario Rehearsal(part-010)**四塊全部已實作**
+> (852 tests,端到端 QA 通過)。part-011 補完跨 part 接線(作息迴圈 / 校準降頻 /
+> new_knowledge 訊號),死程式碼 extract_routine 復活。
 
 ### 15.1 四個能力(在既有安全邊界內)
 
@@ -1068,7 +1078,7 @@ promote,見 §15 與 `.beacon/PLAN.md`。
 | **Personal Model** | ✅ part-007 | 學偏好/作息/流程,證據驅動 stability facets | DB1 `profile_facets` → 投影 vault/agent/profile | 一次行為不 stable;pin/forget 硬覆蓋;走 writer;不改行程 |
 | **Knowledge Scout** | ✅ part-008 | opt-in + allowlist 網路研究 | inbox → curator → writer → vault | web = 資料非指令;`external_untrusted` 標籤;不直接寫入 |
 | **Proactive Advisor** | ✅ part-009 | cron world-diff → 可過期建議 | DB1 `advices` + Discord 推播 | quiet tick 不燒 LLM;只建議;action 走 confirm;有配額/過期 |
-| **Scenario Rehearsal** | 📋 part-010 | 演練「如果…會怎樣」 | vault/scenarios/(非事實層) | 只吃 bucket;硬標 non_authoritative;subprocess 隔離 |
+| **Scenario Rehearsal** | ✅ part-010 | 演練「如果…會怎樣」 | vault/scenarios/(非事實層) | 只吃 bucket;硬標 non_authoritative;subprocess 隔離 |
 
 ### 15.2 三條新增鐵律(延續既有哲學)
 

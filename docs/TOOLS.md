@@ -54,6 +54,7 @@
 | 主動建議 | `job.advise` | `advisor` | CLI, scheduler | `job` | DB1 advices, Discord | `python -m core.agent --job advise` |
 | 知識偵察 | `job.scout` | `scout` | CLI, scheduler | `job` | DB1 watchlist, vault inbox | `python -m core.agent --job scout` |
 | 個人模型 facets | `facets.list` | — | CLI | `read` | DB1 profile_facets | `python -m core.stm facets list` |
+| 情境演練 | `scenario.rehearse` | `scenario` | CLI | `read`(非權威產物) | vault/scenarios（subprocess 隔離） | `python -m core.scenario rehearse <template>` |
 | Threads 同步 | `skill.threads_sync` | — | CLI, scheduler | `job` | vault, skill data | `skills.runner:threads_sync` |
 
 ## 兩種 tool 名詞

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from core import stm, writer
 from core.tools import memory as memory_tools
+from core.tools import note as note_tools
 from core.tools import projects as project_tools
 from core.tools import schedule as schedule_tools
 from core.tools import tasks as task_tools
@@ -92,6 +93,14 @@ def handle_message(text: str, *, channel_ref: str | None = None,
         if tag:
             return _reply(memory_tools.browse_topic(tag, context))
 
+    # 知識庫 CRUD 快徑(part-015):明確指令,零 LLM,走 writer 確認。
+    if stripped.startswith("新增筆記"):
+        return _reply(note_tools.create(stripped[len("新增筆記"):].strip(), context))
+    if stripped.startswith("改筆記"):
+        return _reply(note_tools.edit(stripped[len("改筆記"):].strip(), context))
+    if stripped.startswith("刪筆記"):
+        return _reply(note_tools.delete(stripped[len("刪筆記"):].strip(), context))
+
     if low in ("today", "今天"):
         return _reply(schedule_tools.today(context))
     if low in ("week", "本週"):
@@ -129,6 +138,21 @@ def _dispatch_routed(text: str, context: CapabilityContext, *,
 
     if route.intent == "knowledge_list":
         return _reply(memory_tools.list_knowledge(context))
+
+    if route.intent == "note_create":
+        text_arg = route.argument.strip() or text
+        return _reply(note_tools.create_from_text(text_arg, context))
+
+    if route.intent == "note_delete":
+        nid = route.argument.strip()
+        if not nid:
+            return Reply("要刪哪一篇?給 note id(用「看 <主題>」可查到 id)。")
+        return _reply(note_tools.delete(nid, context))
+
+    if route.intent == "note_edit":
+        # 自然語修改需帶 id 與新內容;引導到明確指令(避免 LLM 誤拆改錯篇)
+        return Reply("修改筆記請用:改筆記 <id> 新標題 | 新內容 | 主題。"
+                     "id 可用「看 <主題>」查到。")
 
     if route.intent == "directive":
         instruction = route.argument.strip()     # 只用 router 抽出的指令內容
@@ -178,12 +202,14 @@ def _advices_digest(db: Path | None) -> str:
     return "建議:\n" + "\n".join(lines)
 
 
-def confirm(pending_id: int, approve: bool, *, db: Path | None = None) -> Reply:
+def confirm(pending_id: int, approve: bool, *, db: Path | None = None,
+            vault: Path | None = None, idx_db: Path | None = None) -> Reply:
     """階段2:使用者按 ✅/❌ 後。無狀態——從 DB1 取 pending,重驗後落地。
 
     裂縫2(part-006-slice-001):以 `pending_claim` 原子認領取代舊的
     「讀 → 檢查 status → apply」。雙擊或跨介面同時確認時,只有認領成功者落地;
     認領失敗者一律回「已處理」,絕不重複落地。
+    vault/idx_db:note_write(part-015)落地依賴;None 落回 config(生產)。
     """
     pending = stm.pending_get(db, pending_id)
     if pending is None:
@@ -201,7 +227,7 @@ def confirm(pending_id: int, approve: bool, *, db: Path | None = None) -> Reply:
         return Reply("已取消。")
 
     # 重驗後落地(writer.confirm_and_apply 內部重跑 precheck——audit A2'/A3')
-    result = writer.confirm_and_apply(pending["proposal"], db)
+    result = writer.confirm_and_apply(pending["proposal"], db, vault=vault, idx_db=idx_db)
     stm.pending_finish(db, pending_id, "done" if result.ok else "cancelled")
     return Reply(f"{'✔ 已建立' if result.ok else '✘ ' + result.detail}")
 

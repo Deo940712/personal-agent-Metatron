@@ -43,12 +43,30 @@ def _reject(db: Path | None, proposal_desc: str, reason: str, *,
 
 def _preview(p: P.Proposal) -> str:
     """需確認時給使用者看的預覽文(§6.6:預覽 → 確認 → 落地)。"""
+    if p.proposal_type == "note_write":
+        return _preview_note_write(p)
     f = p.payload.get("fields", {})
     lines = [f"[{p.proposal_type}] action={p.payload.get('action')} target={p.target}"]
     for k, v in f.items():
         shown = stm.fmt_when(v) if k.endswith("_at") and isinstance(v, int) else v
         lines.append(f"  {k} = {shown}")
     return "\n".join(lines)
+
+
+def _preview_note_write(p: P.Proposal) -> str:
+    """note_write 預覽(part-015):人可讀的新增/修改/刪除摘要。"""
+    action = p.payload.get("action")
+    label = {"create": "新增筆記", "edit": "修改筆記", "delete": "刪除筆記"}.get(
+        action, action)
+    if action == "delete":
+        return f"[{label}] {p.target}\n(刪除後可從黑名單稽核,原文仍在 transcript)"
+    title = p.payload.get("title", "")
+    tags = " ".join(p.payload.get("tags", []))
+    body = str(p.payload.get("body", ""))
+    snippet = body if len(body) <= 200 else body[:200] + "…"
+    target_str = "(新)" if p.target == "new" else p.target
+    return (f"[{label}] {target_str}\n  標題:{title}\n  主題:{tags}\n"
+            f"  內容:{snippet}")
 
 
 # ── 落地(action → SQL;只有這裡碰 DB 寫入)───────────────────────────
@@ -236,6 +254,107 @@ def apply_facet(p: P.Proposal, db: Path | None = None,
     return Result("applied", f"facet #{old_id} superseded by #{row_id}", row_id)
 
 
+def apply_note_write(p: P.Proposal, vault: Path, idx_db: Path,
+                     db: Path | None = None) -> Result:
+    """note_write 落地(part-015 知識庫 CRUD)。三 action:
+
+    - create:ltm.write_note(semantic)+ vindex.upsert(tags ⊆ 受控詞彙表)
+    - edit:改 body/title/tags(update_note_frontmatter + 重寫 body)+ 重 upsert
+    - delete:ltm.delete_note(三處刪)+ 黑名單(防重跑復活)
+
+    §3.1 規則 2 落實:create/edit 的 tags ⊆ INDEX.md 受控詞彙表。
+    """
+    from core import ltm, vindex
+
+    action = p.payload["action"]
+    desc = f"note_write({action})"
+
+    if action == "delete":
+        entry = next((e for e in ltm.registry_entries(vault) if e["id"] == p.target), None)
+        md = vault / (entry["path"] if entry else f"semantic/{p.target}.md")
+        if not md.exists():
+            return _reject(db, desc, f"note not found: {p.target}", target=p.target)
+        r = ltm.delete_note(vault, p.target, idx_db)
+        # 黑名單(防 import 重跑復活)——與 tools/delete_note.py 同語義
+        content_hash = r.get("content_hash")
+        if content_hash:
+            bl = vault / ".deleted_hashes.txt"
+            existing = bl.read_text(encoding="utf-8") if bl.exists() else ""
+            if content_hash not in existing:
+                with open(bl, "a", encoding="utf-8") as f:
+                    f.write(f"{content_hash}  # {p.target}\n")
+        stm.event_append(db, "writer", "state_change",
+                         f"note deleted {p.target} by {p.agent}", target=p.target)
+        return Result("applied", f"已刪除筆記 {p.target}", None)
+
+    # create / edit 共同:tags ⊆ 受控詞彙表(規則 2)
+    tags = list(p.payload["tags"])
+    allowed = ltm.controlled_tags(vault)
+    illegal = set(tags) - allowed
+    if illegal:
+        return _reject(db, desc,
+                       f"tags not in controlled vocabulary: {sorted(illegal)}")
+
+    title = p.payload["title"]
+    body = p.payload["body"]
+    summary = body.replace("\n", " ")[:120]
+
+    if action == "create":
+        note_id = ltm.write_note(
+            vault, "semantic", title=title, body=body,
+            frontmatter={"source": "manual", "manual_tags": True,
+                         "tags": tags, "summary": summary}, ts=stm.now())
+        _upsert_index(vindex, idx_db, note_id, title, summary, tags, db)
+        stm.event_append(db, "writer", "state_change",
+                         f"note created {note_id} by {p.agent}", target=note_id)
+        return Result("applied", f"已新增筆記 {note_id}:{title}", None)
+
+    # edit
+    note_id = p.target
+    entry = next((e for e in ltm.registry_entries(vault) if e["id"] == note_id), None)
+    rel_path = entry["path"] if entry else f"semantic/{note_id}.md"
+    note = ltm.read_note(vault, rel_path)
+    if note is None:
+        return _reject(db, desc, f"note not found or unparsable: {note_id}",
+                       target=note_id)
+    fm = dict(note["frontmatter"])
+    fm["title"] = title
+    fm["tags"] = tags
+    fm["summary"] = summary
+    fm["manual_tags"] = True
+    # 先寫 frontmatter(body 從 note 帶入),再覆蓋 body:update_note_frontmatter
+    # 保留舊 body,故手動重寫整篇以換 body。
+    _rewrite_note(vault, rel_path, fm, body)
+    _upsert_index(vindex, idx_db, note_id, title, summary, tags, db)
+    stm.event_append(db, "writer", "state_change",
+                     f"note edited {note_id} by {p.agent}", target=note_id)
+    return Result("applied", f"已更新筆記 {note_id}:{title}", None)
+
+
+def _rewrite_note(vault: Path, rel_path: str, fm: dict, body: str) -> None:
+    """重寫整篇(frontmatter + 新 body)。edit 換內容用。"""
+    from core import ltm
+    lines = ["---"]
+    for k, v in fm.items():
+        if isinstance(v, list):
+            lines.append(f"{k}:")
+            lines.extend(f"  - {ltm._yaml_scalar(item)}" for item in v)
+        else:
+            lines.append(f"{k}: {ltm._yaml_scalar(v)}")
+    lines += ["---", "", body, ""]
+    (vault / rel_path).write_text("\n".join(lines), encoding="utf-8")
+
+
+def _upsert_index(vindex, idx_db: Path, note_id: str, title: str,
+                  summary: str, tags: list[str], db: Path | None) -> None:
+    """索引 upsert;失敗不擋落地(索引衍生物,rebuild 可修)。"""
+    try:
+        vindex.upsert(idx_db, note_id, title=title, summary=summary, tags=tags)
+    except Exception:                                # noqa: BLE001
+        stm.event_append(db, "writer", "failed",
+                         f"vindex upsert failed for {note_id} (rebuild will fix)")
+
+
 def _item_title(db: Path | None, table: str, row_id: int) -> str:
     """讀 schedule/tasks 標題(完成事件摘要用)。找不到 → 空字串(防禦)。"""
     con = stm.connect(db)
@@ -384,6 +503,21 @@ def precheck(raw: dict | P.Proposal, db: Path | None = None) -> PrecheckResult:
             reason = f"target must be {expected!r}, got {p.target!r}"
             _reject(db, desc, reason)
             return PrecheckResult(False, False, None, reason=reason)
+    elif p.proposal_type == "note_write":
+        # part-015:create → target='new';edit/delete → note_id(非 'new')。
+        # 路徑格式把關(擋跳脫);筆記存在性驗證在 apply_note_write(執行期查 vault)。
+        action = p.payload.get("action")
+        if action == "create":
+            if p.target != "new":
+                reason = f"note_write create target must be 'new', got {p.target!r}"
+                _reject(db, desc, reason)
+                return PrecheckResult(False, False, None, reason=reason)
+        else:  # edit / delete
+            if p.target == "new" or "/" in p.target or "\\" in p.target \
+                    or ".." in p.target or ":" in p.target:
+                reason = f"note_write {action} requires a valid note_id, got {p.target!r}"
+                _reject(db, desc, reason)
+                return PrecheckResult(False, False, None, reason=reason)
     elif p.payload.get("action") != "add":   # schedule/task:DB rowid(add 例外='new')
         if not p.target.isdigit():
             reason = f"target must be a row id for {p.payload.get('action')}: {p.target!r}"
@@ -409,23 +543,30 @@ def precheck(raw: dict | P.Proposal, db: Path | None = None) -> PrecheckResult:
     return PrecheckResult(True, P.needs_confirmation(p), p, preview=_preview(p))
 
 
-def confirm_and_apply(proposal_dict: dict, db: Path | None = None) -> Result:
+def confirm_and_apply(proposal_dict: dict, db: Path | None = None,
+                      vault: Path | None = None, idx_db: Path | None = None) -> Result:
     """非同步確認流的第二階段(part-002.5):使用者按 ✅ 後落地。
 
     **重跑 precheck**——precheck 到此刻可能相隔數分鐘,target 可能已被刪/改
     (audit A2/A3)。不信任第一階段的驗證結果:接受 dict,重驗後才落地。
+    vault/idx_db:note_write(part-015)落地用;None 落回 config 預設(生產)。
     """
     pre = precheck(proposal_dict, db)
     if not pre.ok:
         return Result("rejected", f"revalidation failed: {pre.reason}")
-    return apply_validated(pre.proposal, db)
+    return apply_validated(pre.proposal, db, vault=vault, idx_db=idx_db)
 
 
 def apply_validated(p: P.Proposal, db: Path | None = None,
-                    transcript_dir: Path | None = None) -> Result:
+                    transcript_dir: Path | None = None,
+                    vault: Path | None = None, idx_db: Path | None = None) -> Result:
     """落地一個剛通過 precheck 的 Proposal(同步 CLI 用:precheck 與落地間無空窗)。"""
     if p.proposal_type == "profile_facet":
         return apply_facet(p, db, transcript_dir)
+    if p.proposal_type == "note_write":
+        import config as _config
+        return apply_note_write(p, vault or _config.VAULT_PATH,
+                                idx_db or _config.INDEX_DB, db=db)
     return _apply_change(db, p)
 
 

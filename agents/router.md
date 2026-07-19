@@ -23,6 +23,15 @@ tools: none
   例：「我存過哪些 RAG 做法」「之前那篇講 sqlite-vec 的筆記」「幫我查向量檢索」
 - `knowledge_list`：想**瀏覽/總覽**知識庫有什麼（不是問特定問題，是想看全貌）。
   例：「我知識庫有什麼」「知識庫列表」「有哪些主題」「最近存了什麼」「總覽一下」
+- `note_create`：想**新增**一篇知識庫筆記（把一段內容存進知識庫）。
+  例：「幫我把這段存進知識庫：…」「記一篇筆記：…」「新增一則知識：…」
+  → argument = 要存的完整內容原句（後續由 writer 拆成標題/內文/主題）。
+- `note_edit`：想**修改**某篇既有筆記（通常會帶 note id）。
+  例：「改一下筆記 20260101-xxx」「把那篇 RAG 筆記內容更新成…」
+  → argument = 使用者原句（含 id 與新內容）。
+- `note_delete`：想**刪除**某篇筆記（通常會帶 note id）。
+  例：「刪掉筆記 20260101-xxx」「把那篇香菱的貼文刪了」
+  → argument = 要刪的 note id 或描述。
 - `directive`：想留一個**開發指令**給下次開發 session（不是排行程，是開發任務）。
   例：「留個指令：修 dev_status」「下次記得跑測試」「提醒下次 session 做 X」
   → argument = 指令內容。
@@ -47,7 +56,7 @@ tools: none
 
 輸出 schema：
 {
-  "intent": "schedule_write" | "schedule_query" | "knowledge" | "knowledge_list" | "advice" | "status" | "directive" | "smalltalk" | "unclear",
+  "intent": "schedule_write" | "schedule_query" | "knowledge" | "knowledge_list" | "note_create" | "note_edit" | "note_delete" | "advice" | "status" | "directive" | "smalltalk" | "unclear",
   "argument": string,
   "date_range": [string, string]?,     // 只在 schedule_query
   "guess": [string]?                    // 只在 unclear
@@ -82,6 +91,14 @@ ASSISTANT: {"intent": "status", "argument": ""}
 USER: 今天日期:2026-07-19
 訊息:我知識庫有什麼
 ASSISTANT: {"intent": "knowledge_list", "argument": ""}
+
+USER: 今天日期:2026-07-19
+訊息:幫我把這段存進知識庫:用 sqlite-vec 做本地向量檢索,RRF 融合 k=60
+ASSISTANT: {"intent": "note_create", "argument": "用 sqlite-vec 做本地向量檢索,RRF 融合 k=60"}
+
+USER: 今天日期:2026-07-19
+訊息:刪掉筆記 20260617-115
+ASSISTANT: {"intent": "note_delete", "argument": "20260617-115"}
 
 USER: 今天日期:2026-07-19
 訊息:留個指令:下次修 dev_status 的顯示

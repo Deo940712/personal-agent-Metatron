@@ -194,6 +194,62 @@ def test_directive_empty_asks(db):
     assert stm.directive_list(db, status="pending") == []
 
 
+# ── part-015:知識庫 CRUD 分派 ───────────────────────────────────────
+
+def test_note_create_natural_language_stages_pending(db, tmp_path):
+    from core import ltm
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    idx = tmp_path / "idx.db"
+    calls = {"n": 0}
+
+    def api(s, u, m, j):
+        calls["n"] += 1
+        if calls["n"] == 1:                          # router
+            return json.dumps({"intent": "note_create",
+                               "argument": "用 sqlite-vec 做本地向量檢索"})
+        # 第二次 = note writer 拆解
+        return json.dumps({"title": "本地向量檢索", "body": "用 sqlite-vec 做",
+                           "tags": ["rag-knowledge"]})
+    r = chat.handle_message("幫我把這段存進知識庫:用 sqlite-vec 做本地向量檢索",
+                            db=db, vault=vault, idx_db=idx, _api=api)
+    assert r.needs_buttons and r.pending_id is not None   # 走確認
+    assert "本地向量檢索" in r.text
+
+
+def test_note_delete_natural_language_stages_pending(db, tmp_path):
+    from core import ltm, vindex
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    idx = tmp_path / "idx.db"
+    nid = ltm.write_note(vault, "semantic", title="待刪", body="x",
+                         frontmatter={"source": "manual", "tags": ["misc"],
+                                      "summary": "s"}, ts=T0)
+    vindex.upsert(idx, nid, title="待刪", summary="s", tags=["misc"])
+    r = chat.handle_message(f"刪掉筆記 {nid}", db=db, vault=vault, idx_db=idx,
+                            _api=_route_api({"intent": "note_delete",
+                                             "argument": nid}))
+    assert r.needs_buttons and r.pending_id is not None
+    assert nid in r.text
+
+
+def test_note_create_fast_path_zero_llm(db, tmp_path):
+    """明確指令「新增筆記」不打 LLM(零 router、零 writer 拆解)。"""
+    from core import ltm
+    vault = tmp_path / "vault"
+    ltm.init_vault(vault)
+    idx = tmp_path / "idx.db"
+    called = []
+
+    def spy(s, u, m, j):
+        called.append(1)
+        return "{}"
+    r = chat.handle_message("新增筆記 標題 | 內容 | misc", db=db, vault=vault,
+                            idx_db=idx, _api=spy)
+    assert called == []                              # 快徑零 LLM
+    assert r.needs_buttons                           # 仍走確認
+
+
 # ── 快徑零 LLM ───────────────────────────────────────────────────────
 
 def test_fast_path_today_zero_llm(db):

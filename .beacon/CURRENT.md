@@ -1,12 +1,12 @@
 ﻿# CURRENT
 
-Status: executing
+Status: part-015 三 slice 全綠,待歸檔 / 重啟 Discord bot 載入新意圖
 Part: part-015（知識庫 CRUD + 三層下鑽 + INDEX 中文化）
-Slice: part-015-slice-002（知識庫 CRUD：note_write proposal + writer + router）
+Slice: all done
 
 Design authority: `.beacon/parts/part-015/DESIGN.md`
 Slice map: `.beacon/parts/part-015/TODO.md`
-Baseline: 907 tests green（slice-000 +3、slice-001 +5)
+Baseline: 926 tests green（899 → +3 +5 +19 = +27）
 
 ## 進度
 
@@ -14,8 +14,14 @@ Baseline: 907 tests green（slice-000 +3、slice-001 +5)
   registry 保留）
 - ✅ slice-001：三層下鑽（`browse_topic`/`open_note` + `vindex.notes_by_tag`
   + 快徑「看 <tag>」「看筆記 <id>」零 LLM）
-- ▶ slice-002（in progress）：CRUD note_write proposal + writer 三 action
-  + router note_create/note_edit/note_delete + Discord 分派,全走確認
+- ✅ slice-002：CRUD note_write proposal + writer 三 action + note 能力層 +
+  router note_create/edit/delete + 快徑「新增筆記/改筆記/刪筆記」,全走確認;
+  端到端 smoke 通過（create→browse→open→edit→delete→黑名單）
+
+## Next
+
+- 重啟 Discord bot 載入 3 新意圖 + 快徑（kill python.exe *discord_bot* → 重啟）
+- 歸檔 part-015 → `.beacon/done/part-015/`
 
 ## Context
 

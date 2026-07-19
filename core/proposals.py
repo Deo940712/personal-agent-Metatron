@@ -24,6 +24,9 @@ FACET_CLASSES = {"preference", "identity", "routine", "workflow",
 
 SCHEDULE_ACTIONS = {"add", "update", "done", "cancel"}
 
+# part-015:知識庫 CRUD(Discord 對話新增/修改/刪除筆記,全走確認)
+NOTE_WRITE_ACTIONS = {"create", "edit", "delete"}
+
 # 需使用者確認的 action(§3.1 規則 7:done 與查詢免確認)
 CONFIRM_REQUIRED_ACTIONS = {"add", "update", "cancel"}
 
@@ -233,12 +236,41 @@ def validate_profile_facet(payload: dict[str, Any]) -> None:
             raise ProposalError("supersede requires positive int supersedes_id")
 
 
+def validate_note_write(payload: dict[str, Any]) -> None:
+    """part-015 知識庫 CRUD:action/title/body/tags 結構驗證。
+
+    tags ⊆ 受控詞彙表由 writer 查 INDEX(執行期真相);此處純結構。
+    create/edit 需 title/body/tags;delete 只需 action(target=note_id)。
+    """
+    action = payload.get("action")
+    if action not in NOTE_WRITE_ACTIONS:
+        raise ProposalError(f"illegal note_write action: {action!r} "
+                            f"(allowed: {sorted(NOTE_WRITE_ACTIONS)})")
+
+    if action == "delete":
+        return  # target=note_id 的存在性驗證在 writer
+
+    title = payload.get("title")
+    if not isinstance(title, str) or not title.strip() or len(title) > 200:
+        raise ProposalError("title must be non-empty string <=200 chars")
+
+    body = payload.get("body")
+    if not isinstance(body, str) or not body.strip():
+        raise ProposalError("body must be a non-empty string")
+
+    tags = payload.get("tags")
+    if not isinstance(tags, list) or not tags \
+            or not all(isinstance(t, str) and t.strip() for t in tags):
+        raise ProposalError("tags must be a non-empty list of strings")
+
+
 PAYLOAD_VALIDATORS = {
     "schedule_change": validate_schedule_change,
     "task_change": validate_task_change,
     "classify_note": validate_classify_note,
     "project_update": validate_project_update,
     "profile_facet": validate_profile_facet,
+    "note_write": validate_note_write,
     # future: agent_note / vault_maintenance
 }
 
@@ -269,4 +301,6 @@ def needs_confirmation(proposal: Proposal) -> bool:
         # create/reinforce 免確認:知識層累積,可 forget 逆轉、pin 硬覆蓋;
         # supersede 需確認:§3.2 閘門「supersede 既有筆記」屬需確認層
         return proposal.payload.get("action") == "supersede"
+    if proposal.proposal_type == "note_write":
+        return True  # part-015:知識庫 CRUD 全需確認(刪除尤其)
     return True  # 未知類型保守處理(實際上 validate 已擋)

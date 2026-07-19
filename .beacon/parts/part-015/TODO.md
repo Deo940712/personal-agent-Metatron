@@ -61,20 +61,25 @@ Done gate: 三層下鑽測綠;快徑零 LLM;全綠
 
 ### part-015-slice-002: 知識庫 CRUD(note_write proposal + writer + router)
 
-Status: planned
+Status: DONE（926 tests green;端到端 smoke 通過 create→confirm→browse→open→
+edit→delete→黑名單）
 
 Goal: Discord 對話新增/修改/刪除筆記,全走 writer 確認。
 
 Candidate scope:
-- [ ] `core/proposals.py`：`note_write` payload 驗證(action/note_id/title/body/
-      tags;tags ⊆ 受控詞彙表)
-- [ ] `core/writer.py`：`apply_note_write`(create→write_note+vindex;
-      edit→update+重 upsert;delete→ltm.delete_note+黑名單);全需確認
-- [ ] `core/router.py` + `agents/router.md`：note_create/note_edit/note_delete
-      三 intent
-- [ ] `core/chat.py`：三 intent 分派 → 組 note_write proposal → stage(預覽+確認)
-- [ ] tests：三 action 落地(真 vault)、tags 驗證拒絕、全需確認、delete 黑名單、
-      router 三 intent 分類、Discord 端到端(create→查得到)
+- [x] `core/proposals.py`：`note_write` payload 驗證(action/title/body/tags)+
+      needs_confirmation 全 True(刪除尤其)
+- [x] `core/writer.py`：`apply_note_write`(create→write_note+vindex;
+      edit→重寫 body+重 upsert;delete→ltm.delete_note+黑名單);note_write 預覽;
+      precheck target 把關(create='new'、edit/delete=note_id);confirm_and_apply/
+      apply_validated 加 vault/idx_db(None→config)
+- [x] `core/tools/note.py`：明確指令解析 create/edit/delete + 自然語 create_from_text
+      (LLM 拆 title/body/tags,限受控詞彙表)
+- [x] `core/chat.py`：快徑「新增筆記/改筆記/刪筆記」零 LLM;router 三 intent 分派;
+      confirm 加 vault/idx_db
+- [x] `core/router.py` + `agents/router.md`：note_create/note_edit/note_delete 三 intent
+- [x] tests：test_note_write.py(+9)、test_note_tool.py(+4)、test_router.py(+3)、
+      test_router_wiring.py(+3);端到端 smoke 手測通過
 
 Files-scope: core/proposals.py, core/writer.py, core/router.py, agents/router.md,
 core/chat.py, tests/test_note_write.py, tests/test_router.py

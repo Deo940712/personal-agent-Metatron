@@ -109,7 +109,11 @@ def build_client():
             return  # 非白名單靜默忽略(私人 bot,§4.1)
         # 裂縫1:走統一入口 application.invoke — Discord 也記 agent_runs,且與
         # CLI/MCP 同一分派。allow_recall=False:知識查詢不經 Discord(§4.1 內容分級)。
-        result = invoke(
+        # 真機 QA 修復(2026-07-19):invoke 含同步 LLM 呼叫(數秒),直接 await 會
+        # 塞死 event loop → 其他 interaction 3 秒 ack 逾時。丟 thread 執行。
+        import asyncio
+        result = await asyncio.to_thread(
+            invoke,
             str(message.content),
             InvocationContext(trigger="chat", allow_recall=False,
                               channel_ref=str(message.author.id)))
@@ -125,17 +129,23 @@ def build_client():
         custom_id = interaction.data.get("custom_id", "")
         decoded = decode_custom_id(custom_id)
         if decoded is not None:
+            import asyncio
+            # 先 defer(3 秒內 ack),再到 thread 落地,最後 followup——
+            # 避免 writer/DB 或被其他訊息佔住的空檔造成「未及時回應」
+            await interaction.response.defer()
             pending_id, approve = decoded
-            reply = chat.confirm(pending_id, approve)
-            await interaction.response.send_message(reply.text)
+            reply = await asyncio.to_thread(chat.confirm, pending_id, approve)
+            await interaction.followup.send(reply.text)
             return
         # part-009:advice 回饋按鈕(accept / ignore)→ 校準回饋閉環
         adv = decode_advice_id(custom_id)
         if adv is not None:
+            import asyncio
             from core import advisor
+            await interaction.response.defer()
             advice_id, accepted = adv
-            advisor.record_feedback(None, advice_id, accepted)
-            await interaction.response.send_message(
+            await asyncio.to_thread(advisor.record_feedback, None, advice_id, accepted)
+            await interaction.followup.send(
                 "已記錄:採納" if accepted else "已記錄:略過")
             return
         # 非本 bot 的按鈕

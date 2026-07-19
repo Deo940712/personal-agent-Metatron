@@ -196,6 +196,34 @@ def _cli_confirm(preview: str) -> bool:
     return input("confirm? [y/N] ").strip().lower() == "y"
 
 
+def _default_notify() -> Callable[[str], None]:
+    """排程 job 的通知管道:有 Discord token + 白名單 → DM 推播;否則 console。
+
+    part-011 真機 QA 接線:remind/advise 排程跑時 bot 不一定在線,用獨立短連線
+    DM(channels.discord_bot.send_dm)。DM 失敗 fallback console(fail-open 通知
+    ——提醒寧可印在 log 也不要無聲丟失)。
+    """
+    import os
+
+    import config
+
+    token = os.environ.get(config.DISCORD_TOKEN_ENV)
+    raw_ids = os.environ.get(config.DISCORD_ALLOWED_USER_ID_ENV, "")
+    user_ids = [p.strip() for p in raw_ids.split(",") if p.strip().isdigit()]
+    if not token or not user_ids:
+        return print                              # 未設 Discord → console
+    user_id = int(user_ids[0])
+
+    def notify(text: str) -> None:
+        import asyncio
+        from channels.discord_bot import send_dm
+        try:
+            asyncio.run(send_dm(user_id, text))
+        except Exception as e:                    # noqa: BLE001 — 通知失敗不炸 job
+            print(f"[DM failed: {type(e).__name__}] {text}")
+    return notify
+
+
 def job_consolidate(db: Path | None = None) -> int:
     """夜間蒸餾入口(委派 consolidate.run;§6.3)。"""
     from core import consolidate                    # 延遲 import:remind 路徑不載 llm
@@ -299,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.job == "remind":
-        return job_remind(args.db)
+        return job_remind(args.db, notify_fn=_default_notify())
     if args.job == "consolidate":
         return job_consolidate(args.db)
     if args.job == "curate":
@@ -307,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.job == "track":
         return job_track(args.db)
     if args.job == "advise":
-        return job_advise(args.db)
+        return job_advise(args.db, notify_fn=_default_notify())
     if args.job == "scout":
         return job_scout(args.db)
     if not args.text:

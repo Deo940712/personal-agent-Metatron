@@ -44,6 +44,32 @@ def week(context: CapabilityContext) -> CapabilityResult:
     return CapabilityResult("行程:\n" + _format_schedule(stm.schedule_list(context.db)))
 
 
+def range_view(start_iso: str, end_iso: str, label: str,
+               context: CapabilityContext) -> CapabilityResult:
+    """part-012:確定性時間窗查詢(router 給已驗證的 ISO range;本地時區含頭尾)。
+
+    「明天有什麼」「下週三有事嗎」的回答層——LLM 理解語言,程式算時間與查 DB。
+    """
+    from datetime import datetime, timedelta
+
+    start_ts = int(datetime.fromisoformat(start_iso).timestamp())
+    end_ts = int((datetime.fromisoformat(end_iso) + timedelta(days=1)).timestamp())
+    con = stm.connect(context.db)
+    try:
+        cur = con.execute(
+            "SELECT id, title, start_at, remind_at FROM schedule "
+            "WHERE status = 'active' AND start_at >= ? AND start_at < ? "
+            "ORDER BY start_at", (start_ts, end_ts))
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    finally:
+        con.close()
+    scope = label or f"{start_iso}~{end_iso}"
+    if not rows:
+        return CapabilityResult(f"{scope}沒有排任何行程。")
+    return CapabilityResult(f"{scope}有 {len(rows)} 件事:\n" + _format_schedule(rows))
+
+
 def propose(text: str, context: CapabilityContext) -> CapabilityResult:
     """Parse natural language and stage a validated proposal when confirmation is required."""
     try:

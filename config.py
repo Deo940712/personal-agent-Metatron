@@ -33,6 +33,9 @@ MCP_HTTP_PORT = 7788                            # MCP HTTP 傳輸埠(stdio 無�
 LLM_BASE_URL_ENV = "MY_AGENT_LLM_BASE_URL"     # 未設 = OpenAI 官方
 LLM_MODEL_CHEAP = "gpt-5.5"                # bounded 任務:分類/抽取/格式化
 LLM_MODEL_STRONG = "gpt-5.5"                    # 綜合與決策(orchestrator)
+LLM_MODEL_FALLBACK = "gemini-3-flash"          # 主模型空回應/怪癖時的重試模型
+                                               # (真機 QA:gpt-5.5 對 recall 契約
+                                               #  穩定回 content=null,gemini 正常)
 
 # ── 記憶系統(part-003;docs/MEMORY-zh.md §3) ───────────────────────
 HEALTH_DECAY_PER_DAY = 0.05                    # 線性日衰減(1.0 → 0 需 20 天)

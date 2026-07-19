@@ -108,14 +108,15 @@ def build_client():
         if not is_authorized(message.author.id, allowed):
             return  # 非白名單靜默忽略(私人 bot,§4.1)
         # 裂縫1:走統一入口 application.invoke — Discord 也記 agent_runs,且與
-        # CLI/MCP 同一分派。allow_recall=False:知識查詢不經 Discord(§4.1 內容分級)。
+        # CLI/MCP 同一分派。part-012:allow_recall=True——舊「知識不經 Discord」
+        # 內容分級決策已過時(私人 server + 白名單 + 內網反代/Tailscale 到位)。
         # 真機 QA 修復(2026-07-19):invoke 含同步 LLM 呼叫(數秒),直接 await 會
         # 塞死 event loop → 其他 interaction 3 秒 ack 逾時。丟 thread 執行。
         import asyncio
         result = await asyncio.to_thread(
             invoke,
             str(message.content),
-            InvocationContext(trigger="chat", allow_recall=False,
+            InvocationContext(trigger="chat", allow_recall=True,
                               channel_ref=str(message.author.id)))
         view = _confirm_view(result.pending_id) if result.needs_confirmation else None
         await message.channel.send(result.text, view=view)

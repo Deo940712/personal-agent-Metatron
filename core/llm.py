@@ -73,23 +73,33 @@ def _call_api(system: str, user: str, model: str, json_mode: bool) -> str:
 def complete(system: str, user: str, *, model: str | None = None,
              json_mode: bool = False, db: Path | None = None,
              purpose: str = "", _api=None) -> str:
-    """單次補全。_api 供測試注入 fake;失敗重試 1 次後拋 LLMError。"""
-    model = model or config.LLM_MODEL_CHEAP
+    """單次補全。_api 供測試注入 fake;失敗重試 1 次後拋 LLMError。
+
+    真機 QA 修復(2026-07-19):部分 proxy/模型組合會回 content=null(finish=stop,
+    有 completion tokens)——空回應視為**可重試失敗**;重試改打
+    config.LLM_MODEL_FALLBACK(若有設),繞開特定模型對特定 prompt 的怪癖。
+    """
+    primary = model or config.LLM_MODEL_CHEAP
+    fallback = getattr(config, "LLM_MODEL_FALLBACK", None)
     api: Callable = _api or _call_api
 
     last_err: Exception | None = None
-    for attempt in range(2):                       # 首打 + 重試 1(僅暫時性錯誤)
+    for attempt in range(2):                       # 首打 + 重試 1
+        use_model = primary if attempt == 0 else (fallback or primary)
         try:
-            text = api(system, user, model, json_mode)
+            text = api(system, user, use_model, json_mode)
+            if not (text or "").strip():
+                raise LLMError(f"empty response from {use_model}")
             stm.event_append(db, "llm", "completed",
-                             f"model={model} purpose={purpose or '-'} chars={len(text)}")
+                             f"model={use_model} purpose={purpose or '-'} chars={len(text)}")
             return text
         except Exception as e:                     # noqa: BLE001 — 邊界層集中攔
             last_err = e
-            if attempt == 0 and not _is_retryable(e):
+            # 空回應永遠可重試(換 fallback 模型);其他錯誤維持 B8 規則
+            if attempt == 0 and not isinstance(e, LLMError) and not _is_retryable(e):
                 break                              # B8:4xx 類不重試,直接失敗
     stm.event_append(db, "llm", "failed",
-                     f"model={model} purpose={purpose or '-'} err={type(last_err).__name__}")
+                     f"model={primary} purpose={purpose or '-'} err={type(last_err).__name__}")
     raise LLMError(f"LLM call failed: {last_err}") from last_err
 
 

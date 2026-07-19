@@ -48,16 +48,16 @@ def _reply(result: CapabilityResult) -> Reply:
 
 
 def handle_message(text: str, *, channel_ref: str | None = None,
-                   db: Path | None = None, allow_recall: bool = False,
+                   db: Path | None = None, allow_recall: bool = True,
                    _api=None, vault: Path | None = None,
                    idx_db: Path | None = None,
                    transcript_dir: Path | None = None) -> Reply:
     """階段1:訊息 → 回覆(可能帶待確認 pending_id)。
 
-    allow_recall:本機 CLI/MCP 為 True(知識查詢放行);Discord 為 False
-    (內容分級 §4.1——知識不經 Discord;Tailscale MCP 到位後解除)。
-    vault/idx_db/transcript_dir:recall 依賴,由介面注入(測試/CLI);None 時
-    memory_tools 落回 config 預設。
+    part-012:快徑(精確指令,零 LLM)未命中 → router 意圖分類 → 七 intent 分派。
+    allow_recall 預設 True(舊「知識不經 Discord」內容分級決策已過時——
+    Tailscale/內網反代到位;INTERFACES §4.1 已標註)。
+    vault/idx_db/transcript_dir:recall 依賴,由介面注入;None 落回 config 預設。
     """
     stripped = text.strip()
     low = stripped.lower()
@@ -67,39 +67,88 @@ def handle_message(text: str, *, channel_ref: str | None = None,
 
     # 空訊息:不打 LLM(audit C7)
     if not stripped:
-        return Reply("請輸入指令(today / week / proj / todo <內容> / done <編號> / 或直接說要排的行程)。")
+        return Reply("想排行程、查行程、還是查知識庫?直接說就可以。")
 
-    # 深度知識查詢:本機放行 → recall;Discord 拒絕(內容分級,§4.1)
+    # ── 快徑:精確指令,零 LLM(高頻操作不變貴)──────────────────────
     if any(stripped.startswith(p) for p in _KNOWLEDGE_PREFIXES):
         if not allow_recall:
-            return Reply("知識庫查詢請用本機 CLI(recall);Discord 只處理行程/待辦/提醒。")
+            return Reply("知識庫查詢在此介面未開放。")
         for p in _KNOWLEDGE_PREFIXES:
             if stripped.startswith(p):
                 query = stripped[len(p):].strip() or stripped
                 break
         return _reply(memory_tools.query(query, context))
 
-    # 確定性前綴分派(零 LLM)——唯讀查詢免確認
     if low in ("today", "今天"):
         return _reply(schedule_tools.today(context))
     if low in ("week", "本週"):
         return _reply(schedule_tools.week(context))
     if low in ("proj", "專案"):
         return _reply(project_tools.status(context))
-
-    # done N:標記完成(免確認,§3.1 規則 7)。'done' 無參數也接住
     if low == "done" or low.startswith("done "):
         return _reply(task_tools.complete(stripped[4:].strip(), context))
-
-    # todo ...:待辦(需確認)。低頭已 strip,故 'todo' + 純空白也要接住
     if low == "todo" or low.startswith("todo "):
         title = stripped[4:].strip()
         if not title:
             return Reply("用法:todo <待辦內容>")
         return _reply(task_tools.add(title, evidence=stripped, context=context))
 
-    # 其餘:自然語言 → schedule 子 agent
-    return _reply(schedule_tools.propose(stripped, context))
+    # ── 慢徑:router 意圖分類(單次 cheap LLM)→ 分派 ─────────────────
+    return _dispatch_routed(stripped, context, allow_recall=allow_recall)
+
+
+def _dispatch_routed(text: str, context: CapabilityContext, *,
+                     allow_recall: bool) -> Reply:
+    """part-012:router 分類 → 七 intent 分派。fallback → 現行排程解析。"""
+    from core import router as router_mod
+
+    route = router_mod.classify(text, context.db, _api=context.api)
+
+    if route.intent == "schedule_query" and route.date_range:
+        start, end = route.date_range
+        return _reply(schedule_tools.range_view(start, end,
+                                                route.argument, context))
+
+    if route.intent == "knowledge":
+        if not allow_recall:
+            return Reply("知識庫查詢在此介面未開放。")
+        return _reply(memory_tools.query(route.argument or text, context))
+
+    if route.intent == "advice":
+        return Reply(_advices_digest(context.db))
+
+    if route.intent == "status":
+        proj = project_tools.status(context)
+        return Reply(f"{proj.text}\n---\n{_advices_digest(context.db)}")
+
+    if route.intent == "smalltalk":
+        n = len(stm.schedule_list(context.db))
+        today_hint = f"今天有 {n} 件事排著。" if n else "今天目前沒排東西。"
+        return Reply(f"嗨!{today_hint} 想排行程、查行程或查知識庫,直接說就行。")
+
+    if route.intent == "unclear":
+        guesses = {"schedule_write": "排行程/待辦", "schedule_query": "查行程",
+                   "knowledge": "查知識庫", "advice": "看建議", "status": "看近況"}
+        opts = [guesses[g] for g in route.guess if g in guesses]
+        if opts:
+            return Reply(f"我不太確定你的意思——你是想{'還是'.join(opts)}?"
+                         f"再說具體一點我就能處理。")
+        return Reply("我沒聽懂這句。可以排行程(「明天三點開會」)、查行程"
+                     "(「明天有什麼」)、或查知識庫(「我存過哪些…」)。")
+
+    # schedule_write 或 fallback(router 失敗)→ 現行排程解析(降級不斷服務)
+    return _reply(schedule_tools.propose(text, context))
+
+
+def _advices_digest(db: Path | None) -> str:
+    """pending/pushed 的未過期建議摘要(advice/status intent 用)。"""
+    rows = [a for a in stm.advice_list(db, now_ts=stm.now())
+            if a["state"] in ("pending", "pushed")]
+    if not rows:
+        return "目前沒有待處理的建議。"
+    lines = [f"[{a['priority']}] {a['observation']} → {a['suggestion']}"
+             for a in rows[:5]]
+    return "建議:\n" + "\n".join(lines)
 
 
 def confirm(pending_id: int, approve: bool, *, db: Path | None = None) -> Reply:

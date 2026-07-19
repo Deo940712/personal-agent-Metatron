@@ -70,7 +70,9 @@ control plane，而不是每個 tool call 的同步 data-plane proxy。
 ### 4.1 定位與安全
 
 - **私人 server + bot 鎖定你的 user ID**:非白名單訊息一律不回應。它是你的私人終端,不是公開機器人
-- 內容分級:行程/待辦/提醒/專案進度走 Discord;**深度知識查詢(recall 全文)留本機**——知識庫內容不必要地經過 Discord 伺服器
+- ~~內容分級:深度知識查詢(recall 全文)留本機~~ **已解除(part-012,2026-07-19)**:
+  私人 server + 白名單 + 內網反代/Tailscale 到位後,原「知識內容不經 Discord
+  伺服器」的顧慮已由傳輸層解決;Discord 現可用 recall(`allow_recall=True`)
 - 同時解掉「提醒通知管道」開放決策:`notify.send` 走 Discord DM,手機免費推播
 
 ### 4.2 技術

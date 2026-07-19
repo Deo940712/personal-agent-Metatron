@@ -135,12 +135,12 @@ def test_todo_empty(db):
     assert "用法" in chat.handle_message("todo   ", db=db).text
 
 
-# ── 內容分級:知識查詢拒絕(§4.1)──────────────────────────────────
+# ── 知識查詢:預設放行(part-012);顯式關閉仍會擋 ──────────────────────
 
 @pytest.mark.parametrize("q", ["查 RAG 筆記", "recall 向量索引", "找筆記 sqlite"])
-def test_knowledge_query_rejected(db, q):
-    r = chat.handle_message(q, db=db)
-    assert "本機 CLI" in r.text and r.pending_id is None
+def test_knowledge_query_blocked_when_disabled(db, q):
+    r = chat.handle_message(q, db=db, allow_recall=False)
+    assert "未開放" in r.text and r.pending_id is None
 
 
 # ── LLM 判定非行程 ───────────────────────────────────────────────────
@@ -161,13 +161,13 @@ def test_llm_failure(db):
 # ── audit gate (slice-002) regression ────────────────────────────────
 
 def test_c7_empty_message_no_llm(db):
-    """audit C7:純空白訊息 → 曾落到 LLM 白打 API。"""
+    """audit C7:純空白訊息 → 曾落到 LLM 白打 API。part-012 措辭改自然語。"""
     called = []
     def spy(s, u, m, j):
         called.append(1)
         return GOOD_SCHEDULE
     r = chat.handle_message("   ", db=db, _api=spy)
-    assert called == [] and "請輸入指令" in r.text
+    assert called == [] and "直接說" in r.text
 
 
 def test_c1_uppercase_prefix_dispatch(db):

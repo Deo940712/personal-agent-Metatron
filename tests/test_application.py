@@ -101,10 +101,10 @@ def test_done_applies_without_confirmation(db):
 # ── recall gating:allow_recall 控制知識查詢是否放行 ──────────────────
 
 def test_recall_blocked_when_not_allowed(db):
-    """Discord(allow_recall=False):知識查詢被拒(內容分級 §4.1)。"""
+    """顯式 allow_recall=False 仍會擋(part-012 後 Discord 預設放行,gate 保留)。"""
     ctx = InvocationContext(trigger="chat", allow_recall=False, channel_ref="u:1")
     res = invoke("查 RAG", ctx, db=db)
-    assert res.route == "recall_blocked" and "本機" in res.text
+    assert res.route == "recall_blocked" and "未開放" in res.text
 
 
 def test_recall_allowed_local(db, tmp_path):

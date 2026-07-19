@@ -84,7 +84,7 @@ def _classify_route(text: str, *, allow_recall: bool) -> str:
         return "task_done"
     if low == "todo" or low.startswith("todo "):
         return "task_add"
-    return "schedule"
+    return "routed"      # part-012:慢徑交 router 意圖分類(LLM);細分 intent 在 chat 層
 
 
 def _outcome_for(route: str, reply: chat.Reply) -> str:
@@ -102,7 +102,7 @@ def _outcome_for(route: str, reply: chat.Reply) -> str:
         return "no_result"
     if route in ("schedule_read", "projects"):
         return "answered"
-    # task_done / task_add / 自然語言 schedule:落地或拒絕由 ✔/✘ 標記判斷
+    # task_done / task_add / routed(含自然語言 schedule):落地或拒絕由 ✔/✘ 標記判斷
     if reply.text.startswith("✔") or "已完成" in reply.text or "已建立" in reply.text:
         return "applied"
     if reply.text.startswith("✘") or reply.text.startswith("無法") \

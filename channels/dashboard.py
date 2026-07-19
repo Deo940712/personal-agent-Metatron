@@ -239,3 +239,9 @@ _PAGE_HTML = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+if __name__ == "__main__":
+    # 稽核修復(2026-07-19):先前缺 __main__ 入口,`python -m channels.dashboard`
+    # 靜默結束——README 明載此指令。serve() 一直存在,只是沒被接上。
+    serve()

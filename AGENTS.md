@@ -7,9 +7,10 @@ after angels in Metatron's court (see "Angel naming registry" section below).
 Angel names are display-layer only; code identifiers (module names, role_type,
 --job flags) keep their technical names for API stability.
 
-A personal schedule + knowledge-base assistant agent (parts 001-005 + 002.5 + 004.5 all done;
-326 tests green after the part-006 capability foundation; current work is the part-003.1
-memory documentation contract, then part-006 interaction hardening). The full architecture decision record is in
+A personal schedule + knowledge-base assistant agent (**all parts 001-011 done;
+852 tests green**; adaptive assistant layer complete — Personal Model / Advisor /
+Knowledge Scout / Scenario Rehearsal — with cross-part loops wired closed in
+part-011; scheduler jobs registered and running autonomously). The full architecture decision record is in
 [ARCHITECTURE.md](ARCHITECTURE.md) — read it before implementing anything.
 Interface layer design authority: [INTERFACES.md](INTERFACES.md).
 Capability ownership/exposure authority: [docs/TOOLS.md](docs/TOOLS.md). User-visible
@@ -21,7 +22,8 @@ Predecessor project (patterns to reuse):
 [threads-sync](https://github.com/Deo940712/threads-sync).
 
 `.codegraph/` and `.omo/` are external tooling state, not project code — ignore them.
-Not a git repo yet. User communicates in zh-TW (Traditional Chinese); reply in Chinese.
+Git repo: https://github.com/Deo940712/personal-agent (private). User communicates
+in zh-TW (Traditional Chinese); reply in Chinese.
 
 ## Session-open rule (remote dev-loop directives — part-006-slice-002)
 
@@ -72,10 +74,11 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
   read domain authority → act → validated write → exit. Do not replay whole chat
   history as authoritative state.
 - **Storage roles (ARCHITECTURE.md §2/§5).** DB1 SQLite = authority for mutable
-  structured state (currently 7 tables; planned directives is not implemented).
+  structured state (11 tables: schedule/tasks/projects/cursors/agent_runs/events/
+  pending_proposals/directives/profile_facets/advices/watchlist).
   DB2 Obsidian vault = human knowledge interface
-  (append-only, semantic/ + episodic/). Cold transcript JSONL = raw records, never
-  deleted. Vector index = derived, rebuildable, never holds unique data.
+  (append-only, semantic/ + episodic/ + agent/ + scenarios/). Cold transcript JSONL =
+  raw records, never deleted. Vector index = derived, rebuildable, never holds unique data.
 - **Memory lifecycle = health metabolism, NOT hard TTL.** Hits heal, disuse decays,
   zero → trash → archive. Schedule/identity/preferences immune. Forgetting means
   "not auto-loaded", never physical deletion.

@@ -50,6 +50,10 @@
 | part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
 | part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
 | part-014 | **done** (2026-07-19) | **MCP dev_plan + 儀表板常駐**：dev_plan 工具（第 11 MCP 工具，讀 OpenCode session 的 plan/todo 進度）+ 儀表板設 ONSTART 常駐（127.0.0.1:7777，內網反代對外）；899 tests、dev_plan 真機讀到 part-011 session 7/7 todo | `.beacon/parts/part-014/DESIGN.md` | `.beacon/done/part-014/` |
+| part-015 | **done** (2026-07-20) | **知識庫 CRUD + 三層下鑽 + INDEX 中文化**：note_write proposal、browse/open、快徑；931 tests 級 | `.beacon/done/part-015/DESIGN.md` | `.beacon/done/part-015/` |
+| part-016 | **done** (2026-07-21) | **能力速查 + 互動儀表板**：CHEATSHEET、B1 人話唯讀、B2 confirm/done（writer 路徑）、timeline、INTERFACES §5 修訂；939 tests、真瀏覽器 confirm/done、1280/768/375 雙 reviewer 視覺 QA 通過 | `.beacon/done/part-016/DESIGN.md` | `.beacon/done/part-016/` |
+| part-017 | **done** (2026-07-21) | **LLM transient model failover hotfix**：429/5xx/網路錯誤/空內容依序切換 distinct 候選；永久性 4xx fail-fast；Discord-facing 注入 cooldown QA 與 943 tests 通過 | `.beacon/done/part-017/DESIGN.md` | `.beacon/done/part-017/` |
+| part-018 | **design** | **Knowledge Base 2.0**：Topic/Evidence 雙層架構——修正 KB 1.0「單篇貼文=單篇筆記」設計缺陷，建立 topic（精煉知識）與 evidence（原始證據）分層，檢索預設只回傳 topic；以 21 篇待整理貼文為 seed migration | `.beacon/parts/part-018/DESIGN.md` | `.beacon/parts/part-018/TODO.md` |
 
 ## Success Criteria
 

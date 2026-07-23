@@ -321,6 +321,39 @@
         }
       }
     },
+    "part-017": {
+      "slices": {
+        "slice-000": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_llm.py -q",
+            "python -m pytest tests/test_recall.py tests/test_discord.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Trigger a real recall through the Discord-facing path while a configured model is in cooldown; confirm completion advances to another candidate and no raw model_cooldown is returned."
+          ]
+        }
+      }
+    },
+    "part-016": {
+      "slices": {
+        "slice-003": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_dashboard.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Restart MyAgent-dashboard, open http://127.0.0.1:7777, and confirm all seven panels load without console errors at 1280, 768, and 375 pixel widths.",
+            "Create one pending task and one active task; confirm the pending item and complete both tasks from the dashboard, verifying both POST requests return 200 and the rows refresh.",
+            "Verify action buttons are at least 44 pixels high, there is no horizontal overflow, and Traditional Chinese phrases do not split into orphaned characters."
+          ]
+        }
+      }
+    },
     "part-006": {
       "slices": {
         "slice-000": {
@@ -375,6 +408,59 @@
           "manualQa": [
             "BLOCKED until VPS stage: on the VPS set MY_AGENT_MCP_BIND_HOST to the Tailscale IP, run `python -m channels.mcp_http`, and from a laptop OpenCode over Tailscale call tools/list + dev_status + schedule_add->confirm end to end.",
             "Attempt to start with MY_AGENT_MCP_BIND_HOST=0.0.0.0 (or a public IP) and confirm the server refuses to start (fail-closed bind guard)."
+          ]
+        }
+      }
+    },
+    "part-018": {
+      "slices": {
+        "slice-001": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_migrate_kb_2_0.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [],
+          "manualQa": [
+            "Run `python scripts/migrate_kb_2_0.py --dry-run` and verify it lists 807 files to be marked as evidence without errors."
+          ]
+        },
+        "slice-002": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/test_retrieve_topic_first.py -q",
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001"
+          ],
+          "manualQa": [
+            "Search for 'AI 開源工具' via recall; confirm only the topic note is returned, not the 9 original posts."
+          ]
+        },
+        "slice-003": {
+          "type": "implementation",
+          "commands": [
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-001",
+            "slice-002"
+          ],
+          "manualQa": [
+            "Manually inspect the 5 topic notes in vault/semantic/topic/ and confirm they accurately synthesize the 21 source posts."
+          ]
+        },
+        "slice-004": {
+          "type": "documentation",
+          "commands": [
+            "python -m pytest tests/ -q"
+          ],
+          "dependsOn": [
+            "slice-003"
+          ],
+          "manualQa": [
+            "Review INDEX.md to confirm topic notes are in the main registry and evidence notes are in a downgraded appendix section."
           ]
         }
       }

@@ -1,17 +1,26 @@
 ﻿# CURRENT
 
-Status: planning（part-018 DESIGN created, awaiting slice-001 promotion）
+Status: executable
 Active part: part-018 Knowledge Base 2.0
+Active slice: slice-001 Schema 定義與 Migration Script
 Design: `.beacon/parts/part-018/DESIGN.md`
 
-## Context
+## Scope
 
-KB 1.0 設計缺陷：「單篇貼文 = 單篇筆記」導致 807 篇孤立筆記、59 篇 misc、檢索噪音。part-018 建立 Topic/Evidence 雙層架構，以 21 篇待整理貼文為 seed migration。
+建立 `note_type` frontmatter schema、deterministic migration script（標記 807 篇為 evidence）、5 篇 topic notes seed 檔案，以及 rollback 機制。
 
-## Next action
+## Verification
 
-Promote slice-001（Schema 定義與 Migration Script）to executable.
+- `python -m pytest tests/test_migrate_kb_2_0.py -q`（新增）
+- `python -m pytest tests/ -q`（943 tests 必須維持通過）
 
-## Blockers
+## Files allowed
 
-- 待使用者確認 DESIGN.md 與 TODO.md 內容後，promote slice-001 進入 executable 狀態
+- `scripts/migrate_kb_2_0.py` (new)
+- `core/ltm.py` (extend schema)
+- `tests/test_migrate_kb_2_0.py` (new)
+- `vault/semantic/topic/*.md` (5 seed topic notes)
+
+## Done gate
+
+Migration script 可執行 dry-run 無誤，943 tests 通過，rollback 機制可運作。

@@ -101,7 +101,17 @@ def open_note(note_id: str, context: CapabilityContext) -> CapabilityResult:
 
 
 def query(text: str, context: CapabilityContext) -> CapabilityResult:
-    """Run citation-aware recall with dependencies supplied by the interface."""
+    """Run citation-aware recall with dependencies supplied by the interface.
+    
+    KB 2.0: 預設只搜尋 topic notes;若需搜尋原始貼文(evidence),
+    使用「搜原文 <query>」或「include evidence」。
+    """
+    # KB 2.0: 檢查是否明確要求搜尋原始貼文
+    include_evidence = "搜原文" in text or "include evidence" in text.lower()
+    if include_evidence:
+        # 移除指令前綴,只保留實際查詢
+        text = text.replace("搜原文", "").replace("include evidence", "").strip()
+    
     result = recall.ask(
         text,
         vault=context.vault,
@@ -109,6 +119,7 @@ def query(text: str, context: CapabilityContext) -> CapabilityResult:
         db=context.db,
         transcript_dir=context.transcript_dir,
         _api=context.api,
+        include_evidence=include_evidence,
     )
     # 裂縫1/3:把 recall 的 found/not_found 契約帶回,供上層推 outcome。
     # ok=False(執行異常)也視為 not_found(誠實:沒有可信答案)。

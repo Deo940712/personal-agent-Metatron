@@ -56,15 +56,22 @@ def _rrf_fuse(candidate_lists: list[list[Hit]], k: int = RRF_K) -> list[Hit]:
     return fused
 
 
-def _strong_index_hits(vault: Path, query: str, limit: int) -> list[Hit]:
+def _strong_index_hits(vault: Path, query: str, limit: int, *,
+                        include_evidence: bool = False) -> list[Hit]:
     """強命中:≥2 個 token 命中同一筆記 → 短路(零 FTS/embedding 成本)。
-    單 token 查詢時,全部 token(=1)命中也算強。"""
+    單 token 查詢時,全部 token(=1)命中也算強。
+    KB 2.0:預設只搜尋 topic notes;include_evidence=True 時也包含原始貼文。"""
     toks = _tokens(query)
     if not toks:
         return []
     need = min(2, len(toks))
     out = []
     for e in ltm.registry_entries(vault):
+        # KB 2.0: skip evidence notes unless explicitly included
+        if not include_evidence:
+            note = ltm.read_note(vault, e["path"])
+            if note and note["frontmatter"].get("note_type") == "evidence":
+                continue
         haystack = f"{e['title']} {e['summary']}"
         n_hit = sum(1 for t in toks if t in haystack)
         if n_hit >= need:
@@ -75,14 +82,17 @@ def _strong_index_hits(vault: Path, query: str, limit: int) -> list[Hit]:
 
 def search(vault: Path, idx_db: Path, query: str, *,
            embed_fn=None, limit: int = 5,
-           db: Path | None = None) -> list[Hit]:
+           db: Path | None = None,
+           include_evidence: bool = False) -> list[Hit]:
     """RRF 融合檢索(part-004.5):強 index 命中短路;否則三段候選融合。
 
     embed_fn: (text) -> list[float]。None = 跳過向量段(無 embedding 能力時)。
     db: 提供時,命中筆記的 source_ids 中 evt: 事件會觸發回血。
+    include_evidence: KB 2.0——True 時也搜尋原始貼文(evidence);預設 False 只搜尋
+        精煉後的主題筆記(topic),讓檢索結果更乾淨。
     """
     # 零成本短路:多 token 強命中不需要融合
-    strong = _strong_index_hits(vault, query, limit)
+    strong = _strong_index_hits(vault, query, limit, include_evidence=include_evidence)
     if strong:
         if db is not None:
             _heal_sources(vault, strong, db)
@@ -90,8 +100,8 @@ def search(vault: Path, idx_db: Path, query: str, *,
 
     # 三段並行取候選(池放大 2 倍)→ RRF 融合
     pool = limit * 2
-    idx_hits = _stage_index(vault, query, pool)
-    fts_hits = _stage_fts(vault, idx_db, query, pool)
+    idx_hits = _stage_index(vault, query, pool, include_evidence=include_evidence)
+    fts_hits = _stage_fts(vault, idx_db, query, pool, include_evidence=include_evidence)
     vec_hits = _stage_vec(vault, idx_db, query, embed_fn, pool) if embed_fn else []
     hits = _rrf_fuse([idx_hits, fts_hits, vec_hits])[:limit]
 
@@ -100,13 +110,20 @@ def search(vault: Path, idx_db: Path, query: str, *,
     return hits
 
 
-def _stage_index(vault: Path, query: str, limit: int) -> list[Hit]:
-    """① registry 一行描述比對:任一 token 出現在 title/summary。"""
+def _stage_index(vault: Path, query: str, limit: int, *,
+                  include_evidence: bool = False) -> list[Hit]:
+    """① registry 一行描述比對:任一 token 出現在 title/summary。
+    KB 2.0:預設只搜尋 topic notes;include_evidence=True 時也包含原始貼文。"""
     toks = _tokens(query)
     if not toks:
         return []
     out = []
     for e in ltm.registry_entries(vault):
+        # KB 2.0: skip evidence notes unless explicitly included
+        if not include_evidence:
+            note = ltm.read_note(vault, e["path"])
+            if note and note["frontmatter"].get("note_type") == "evidence":
+                continue
         haystack = f"{e['title']} {e['summary']}"
         if any(t in haystack for t in toks):
             out.append(Hit(e["id"], e["path"], 0.0, "index"))
@@ -122,11 +139,22 @@ def _note_path(vault: Path, note_id: str) -> str:
     return ""
 
 
-def _stage_fts(vault: Path, idx_db: Path, query: str, limit: int) -> list[Hit]:
+def _stage_fts(vault: Path, idx_db: Path, query: str, limit: int, *,
+                include_evidence: bool = False) -> list[Hit]:
     if not idx_db.exists():
         return []
-    return [Hit(nid, _note_path(vault, nid), score, "fts")
+    hits = [Hit(nid, _note_path(vault, nid), score, "fts")
             for nid, score in vindex.search_fts(idx_db, query, limit)]
+    # KB 2.0: filter evidence notes unless explicitly included
+    if not include_evidence:
+        filtered = []
+        for h in hits:
+            note = ltm.read_note(vault, h.path) if h.path else None
+            if note and note["frontmatter"].get("note_type") == "evidence":
+                continue
+            filtered.append(h)
+        return filtered
+    return hits
 
 
 def _stage_vec(vault: Path, idx_db: Path, query: str, embed_fn, limit: int) -> list[Hit]:

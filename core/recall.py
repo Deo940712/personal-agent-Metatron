@@ -31,9 +31,11 @@ class RecallResult:
     # citations=[]」一律降級 not_found——不信 LLM 自律,程式面保障『無來源不得斷言』。
 
 
-def _tool_search(args: dict, vault: Path, idx_db: Path, db: Path | None) -> str:
+def _tool_search(args: dict, vault: Path, idx_db: Path, db: Path | None,
+                 include_evidence: bool = False) -> str:
     query = str(args.get("query", ""))[:200]
-    hits = retrieve.search(vault, idx_db, query, db=db)     # 命中即回血(§6.4)
+    hits = retrieve.search(vault, idx_db, query, db=db,
+                           include_evidence=include_evidence)     # 命中即回血(§6.4)
     return json.dumps(
         [{"id": h.note_id, "path": h.path, "stage": h.stage} for h in hits[:5]],
         ensure_ascii=False)
@@ -77,8 +79,11 @@ def _verify_citations(citations: list, vault: Path) -> list[str]:
 
 def ask(query: str, *, vault: Path | None = None, idx_db: Path | None = None,
         db: Path | None = None, transcript_dir: Path | None = None,
-        _api=None) -> RecallResult:
-    """問答主迴圈。永不拋例外——一切異常化為 ok=False 的誠實結果。"""
+        _api=None, include_evidence: bool = False) -> RecallResult:
+    """問答主迴圈。永不拋例外——一切異常化為 ok=False 的誠實結果。
+    
+    KB 2.0: include_evidence=True 時也搜尋原始貼文;預設 False 只搜尋主題筆記。
+    """
     vault = vault or config.VAULT_PATH
     idx_db = idx_db or config.INDEX_DB
     system = subagents.load_contract("recall")
@@ -120,7 +125,8 @@ def ask(query: str, *, vault: Path | None = None, idx_db: Path | None = None,
                 transcript_log.append('[工具結果] {"error": "search 次數已達上限,請 answer"}')
                 continue
             search_count += 1
-            result = _tool_search(move, vault, idx_db, db)
+            result = _tool_search(move, vault, idx_db, db,
+                                  include_evidence=include_evidence)
         elif tool == "read_note":
             result = _tool_read_note(move, vault)
         elif tool == "rehydrate":

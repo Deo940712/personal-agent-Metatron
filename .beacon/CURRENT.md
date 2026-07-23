@@ -2,25 +2,33 @@
 
 Status: executable
 Active part: part-018 Knowledge Base 2.0
-Active slice: slice-001 Schema 定義與 Migration Script
+Active slice: slice-002 檢索邏輯降級（Zerachiel/Retrieve）
 Design: `.beacon/parts/part-018/DESIGN.md`
 
-## Scope
+## Completed
 
-建立 `note_type` frontmatter schema、deterministic migration script（標記 807 篇為 evidence）、5 篇 topic notes seed 檔案，以及 rollback 機制。
+- slice-001: KB 2.0 migration script（`scripts/migrate_kb_2_0.py`）+ 8 tests
+  - Dry-run 驗證：807 evidence notes, 5 topic notes
+  - 處理 malformed YAML frontmatter
+  - Rollback 機制可運作
+  - 951 tests 通過
+
+## Scope (slice-002)
+
+修改檢索邏輯，預設只搜尋 topic notes，evidence 降級為佐證連結。
 
 ## Verification
 
-- `python -m pytest tests/test_migrate_kb_2_0.py -q`（新增）
-- `python -m pytest tests/ -q`（943 tests 必須維持通過）
+- `python -m pytest tests/test_retrieve_topic_first.py -q`（新增）
+- `python -m pytest tests/ -q`（951 tests 必須維持通過）
 
 ## Files allowed
 
-- `scripts/migrate_kb_2_0.py` (new)
-- `core/ltm.py` (extend schema)
-- `tests/test_migrate_kb_2_0.py` (new)
-- `vault/semantic/topic/*.md` (5 seed topic notes)
+- `core/retrieve.py` (modify)
+- `core/vindex.py` (modify rebuild/upsert to filter note_type)
+- `core/tools/memory.py` (add include_evidence flag)
+- `tests/test_retrieve_topic_first.py` (new)
 
 ## Done gate
 
-Migration script 可執行 dry-run 無誤，943 tests 通過，rollback 機制可運作。
+搜尋「AI 開源工具」只回傳 topic note，不回傳 9 篇原始貼文；`include_evidence=True` 時可搜尋原始貼文（向後相容）。

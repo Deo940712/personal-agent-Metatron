@@ -88,14 +88,21 @@ MIGRATION_GROUPS = {
 
 
 def load_frontmatter(file_path: Path) -> tuple[dict, str]:
-    """Load frontmatter and body from a markdown file."""
+    """Load frontmatter and body from a markdown file.
+    
+    Handles malformed YAML gracefully by returning empty dict.
+    """
     content = file_path.read_text(encoding="utf-8")
     if not content.startswith("---"):
         return {}, content
     parts = content.split("---", 2)
     if len(parts) < 3:
         return {}, content
-    fm = yaml.safe_load(parts[1]) or {}
+    try:
+        fm = yaml.safe_load(parts[1]) or {}
+    except yaml.YAMLError:
+        # Malformed frontmatter - return empty dict but preserve body
+        fm = {}
     body = parts[2].strip()
     return fm, body
 

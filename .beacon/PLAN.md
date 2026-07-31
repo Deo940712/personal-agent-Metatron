@@ -41,19 +41,20 @@
 | part-007 | **done** (2026-07-19) | **Personal Model**（個人模型）：DB1 `profile_facets` 第九表——證據驅動 stability facets、生命週期（provisional→stable→pinned→superseded/forgotten）、stability detector 純函數、profile_facet 提案走 writer（evidence 溯源 transcript、Mneme supersede）、routine 抽取器、consolidate 掛鉤、vault/agent/profile 投影 + recall 可見；688 tests 綠、三 slice 端到端 QA 通過 | `.beacon/parts/part-007/DESIGN.md` | `.beacon/done/part-007/` |
 | part-008 | **done** (2026-07-19) | **Knowledge Scout**（網路知識取得）：DB1 `watchlist` 第十一表 + allowlist（fail-closed，防子字串攻擊）+ web fetch skill（RSS/Atom，stdlib）+ `external_untrusted` 污染標籤（web = 資料非指令）+ curator 注入隔離框 + 抓取零 writer 寫入 + `--job scout` 觸發（watchlist 到期 / goal 知識缺口且有信任來源）；保存 URL/author/captured_at/content_hash → inbox → curator → writer → vault；778 tests 綠、三 slice 端到端 QA 通過（真網路抓取 QA 待來源） | `.beacon/parts/part-008/DESIGN.md` | `.beacon/done/part-008/` |
 | part-009 | **done** (2026-07-19) | **Proactive Advisor / Subconscious**（主動建議）：DB1 `advices` 第十表 + baseline checkpoint + 確定性 world-diff（quiet-tick 無變化零 LLM）+ reflect 產可過期 advice（四重防疲勞：配額/去重/過期/優先級）+ Discord 推播 + action→confirm（走 writer）+ 校準回饋成 part-007 facet（越用越準）；`--job advise` cron 接線；永不靜默改狀態；735 tests 綠、三 slice 端到端 QA 通過（真 Discord 連線待 token） | `.beacon/parts/part-009/DESIGN.md` | `.beacon/done/part-009/` |
-| part-010 | designed | **crowd-scenario integration**（情境演練）：vendored 釘版（第二個 vendored 黑箱，同 threads-sync）+ subprocess CLI 呼叫；Metatron 產去識別化 bucket seed → 子行程演練 → advisory 報告存 vault，標 non-authoritative；新增個人 domain packs（personal_schedule / habit_change / project_portfolio） | `.beacon/parts/part-010/DESIGN.md` | 待 slice |
+| part-010 | **done** (2026-07-19) | **crowd-scenario integration**（情境演練）：vendored 釘版（第二個 vendored 黑箱，同 threads-sync）+ subprocess CLI 呼叫；Metatron 產去識別化 bucket seed → 子行程演練 → advisory 報告存 vault，標 non-authoritative；新增個人 domain packs（personal_schedule / habit_change / project_portfolio） | `.beacon/parts/part-010/DESIGN.md` | `.beacon/done/part-010/` |
 | part-011 | **done** (2026-07-19) | **收尾接線**（closing-loop，非 backlog MiroFish）：作息 completed 事件 → routine facet → advisor 偏離（死程式碼 extract_routine 復活）+ advisor 校準降頻 + world-diff new_knowledge 訊號 + golden queries 回歸（backlog-007）+ 文件全同步；852 tests 綠、三 slice QA 通過 | `.beacon/parts/part-011/DESIGN.md` | `.beacon/done/part-011/` |
-| part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
-| part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
-| part-014 | **done** (2026-07-19) | **MCP dev_plan + 儀表板常駐**：dev_plan 工具（第 11 MCP 工具，讀 OpenCode session 的 plan/todo 進度）+ 儀表板設 ONSTART 常駐（127.0.0.1:7777，內網反代對外）；899 tests、dev_plan 真機讀到 part-011 session 7/7 todo | `.beacon/parts/part-014/DESIGN.md` | `.beacon/done/part-014/` |
-| part-011 | backlog | **MiroFish optional adapter**（大型社會模擬，有實際需求才做）：opt-in 外部隔離 sandbox；Metatron 只輸出去識別化 scenario package（問題/角色/公開背景，不含私人原文）；MiroFish 永不讀寫 DB1/vault/transcript；報告回來標「模擬/非事實/非預測」；AGPL + Zep Cloud 依賴 → 隔離不入核心 | 見 backlog-028 | — |
 | part-012 | **done** (2026-07-19) | **對話式 orchestrator**（backlog-033）：LLM-first 意圖路由（router 子 agent，七 intent；快徑保留零 LLM）；Discord 聽懂「明天有什麼/我存過哪些 X/最近怎樣/哈囉」+ 開放 recall + unclear 友善追問；寫入鐵律不變；附帶修 recall 空回應 fallback；886 tests、真機 QA 五句全通 | `.beacon/parts/part-012/DESIGN.md` | `.beacon/done/part-012/` |
 | part-013 | **done** (2026-07-19) | **對話層補兩意圖**：router 加 directive（Discord 留開發指令入佇列）+ knowledge_list（知識庫瀏覽總覽,tag 分布走索引零檔案 I/O,808 篇 0.15s）；移除過廣「知識」快徑前綴；895 tests、真機 QA 通過 | `.beacon/parts/part-013/DESIGN.md` | `.beacon/done/part-013/` |
 | part-014 | **done** (2026-07-19) | **MCP dev_plan + 儀表板常駐**：dev_plan 工具（第 11 MCP 工具，讀 OpenCode session 的 plan/todo 進度）+ 儀表板設 ONSTART 常駐（127.0.0.1:7777，內網反代對外）；899 tests、dev_plan 真機讀到 part-011 session 7/7 todo | `.beacon/parts/part-014/DESIGN.md` | `.beacon/done/part-014/` |
 | part-015 | **done** (2026-07-20) | **知識庫 CRUD + 三層下鑽 + INDEX 中文化**：note_write proposal、browse/open、快徑；931 tests 級 | `.beacon/done/part-015/DESIGN.md` | `.beacon/done/part-015/` |
 | part-016 | **done** (2026-07-21) | **能力速查 + 互動儀表板**：CHEATSHEET、B1 人話唯讀、B2 confirm/done（writer 路徑）、timeline、INTERFACES §5 修訂；939 tests、真瀏覽器 confirm/done、1280/768/375 雙 reviewer 視覺 QA 通過 | `.beacon/done/part-016/DESIGN.md` | `.beacon/done/part-016/` |
 | part-017 | **done** (2026-07-21) | **LLM transient model failover hotfix**：429/5xx/網路錯誤/空內容依序切換 distinct 候選；永久性 4xx fail-fast；Discord-facing 注入 cooldown QA 與 943 tests 通過 | `.beacon/done/part-017/DESIGN.md` | `.beacon/done/part-017/` |
-| part-018 | **design** | **Knowledge Base 2.0**：Topic/Evidence 雙層架構——修正 KB 1.0「單篇貼文=單篇筆記」設計缺陷，建立 topic（精煉知識）與 evidence（原始證據）分層，檢索預設只回傳 topic；以 21 篇待整理貼文為 seed migration | `.beacon/parts/part-018/DESIGN.md` | `.beacon/parts/part-018/TODO.md` |
+| part-018 | **done** (2026-07-24) | **Knowledge Base 2.0**：Topic/Evidence 雙層架構——修正 KB 1.0「單篇貼文=單篇筆記」設計缺陷，建立 topic（精煉知識）與 evidence（原始證據）分層，檢索預設只回傳 topic；21 篇 seed migration → 5 篇 Topic Notes；migration 完整性（K1）與測試索引隔離（K2）修復；961 tests 綠、UnitTestCore PASS、真實探針全通過 | `.beacon/parts/part-018/DESIGN.md` | `.beacon/done/part-018/` |
+| part-019 | **slice-001 executable; Gate A passed; Gate B pending** | **Evidence 升面計畫（批次 Topic 歸屬）**：786 篇未歸屬 Evidence 依主題分群轉 Topic Notes；Pilot 已挑選 7 群 49 篇（46 篇歸屬，3 篇保留），群提案已通過 Gate A，草稿正等待使用者 Gate B 確認，尚未落地；採半自動 Anael-lite 模式（腳本提案確認，腳本自動落地）；剩餘 737 篇待處理 | `.beacon/parts/part-019/DESIGN.md` | `.beacon/parts/part-019/TODO.md` |
+| part-020 | planned | **Reliability & Operability Foundation**：修復已知漏洞（B7/B10/W1/W2/M2）與基礎設施強化，為常駐服務鋪路 | .beacon/parts/part-020/DESIGN.md | .beacon/parts/part-020/TODO.md |
+| part-021 | planned | **Resident Daemon Control Center**：排程器從 Windows Task Scheduler 轉移至常駐 daemon + 單一 watchdog，解決 backlog-003 隱藏任務問題 | .beacon/parts/part-021/DESIGN.md | .beacon/parts/part-021/TODO.md |
+
+MiroFish optional adapter 保留於 `backlog-028`；它不是已編號的 active PART，亦不構成執行 permission。
 
 ## Success Criteria
 
@@ -62,7 +63,7 @@
 - 低健康 events 經夜間蒸餾後出現在 vault episodic/ 且可檢索；rehydrate 可沿 source_ids 讀回原文
 - 任一 skill 管線單獨壞掉不影響 core 與其他 skill
 - 子 agent 提案被 writer 驗證攔截（含拒絕路徑）可測試證明
-- （part-006 slice-001，[PLANNED]）CLI / Discord / MCP 共用單一 invocation 入口回 `InvocationResult`；pending 確認為原子認領（併發雙確認只落地一次）；recall found 答案無有效引用即拒絕
+- （part-006 slice-001，code-complete/VPS QA blocked）CLI / Discord / MCP 共用單一 invocation 入口回 `InvocationResult`；pending 確認為原子認領（併發雙確認只落地一次）；recall found 答案無有效引用即拒絕
 - （part-007）同一偏好重複出現才升 stable；使用者 pin/forget 硬覆蓋評分；profile facets 可投影成 vault 可讀且可 recall
 - （part-008）網路研究結果帶來源與 `external_untrusted` 標記，經 curator+writer 才進 semantic/；web 內容中的指令注入不被執行
 - （part-009）world-diff 無重要變化 → 不呼叫 LLM；建議帶 expires_at；建議的 action 落地仍走確認

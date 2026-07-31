@@ -7,10 +7,10 @@ after angels in Metatron's court (see "Angel naming registry" section below).
 Angel names are display-layer only; code identifiers (module names, role_type,
 --job flags) keep their technical names for API stability.
 
-A personal schedule + knowledge-base assistant agent (**all parts 001-011 done;
-852 tests green**; adaptive assistant layer complete — Personal Model / Advisor /
+A personal schedule + knowledge-base assistant agent (**all parts 001-018 done;
+961 tests green**; adaptive assistant layer complete — Personal Model / Advisor /
 Knowledge Scout / Scenario Rehearsal — with cross-part loops wired closed in
-part-011; scheduler jobs registered and running autonomously). The full architecture decision record is in
+part-011; KB 2.0 Topic/Evidence dual layer live; scheduler jobs registered and running autonomously). The full architecture decision record is in
 [ARCHITECTURE.md](ARCHITECTURE.md) — read it before implementing anything.
 Interface layer design authority: [INTERFACES.md](INTERFACES.md).
 Capability ownership/exposure authority: [docs/TOOLS.md](docs/TOOLS.md). User-visible
@@ -136,11 +136,9 @@ Phase plan lives in `.beacon/PLAN.md` (mirrors ARCHITECTURE.md build order).
 
 ## Build order (respect the phase gates in ARCHITECTURE.md §10)
 
-DONE: 1, 2, 2.5, 3, 4 (threads runner + curator + recall), 4.5 (topic traces /
-supersede / RRF), 5 (coding_tracker, live three-source gate passed).
-CURRENT: part-003.1 bilingual memory contract (docs only). NEXT: part-006 interaction
-hardening → stdio MCP/directives;
-then part-003.5 read-only dashboard; HTTP/Tailscale remains gated on VPS.
+DONE: 1, 2, 2.5, 3, 3.1, 3.2, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+15, 16, 17, 18. CURRENT: part-019 (Evidence 批次 Topic 化) slice-001 executable；閘門 A 已通過，Pilot 分群提案（原 786 筆，Pilot 49 筆：46 筆連結、3 筆保留，剩餘 737 筆）停在閘門 B 待使用者確認。\nFUTURE: part-020 (系統可靠性) → part-021 (常駐 Supervisor 與 Watchdog 守護行程)。
+Full timeline: [`.beacon/PLAN.md`](.beacon/PLAN.md).
 Key facts for future sessions:
 - OpenCode session store confirmed readable: `~/.local/share/opencode/opencode.db`
   (SQLite, WAL; tables session/message/part/todo) — open `mode=ro` only.
@@ -153,12 +151,12 @@ Key facts for future sessions:
 
 Full list in ARCHITECTURE.md §11. Highlights:
 
-- Vector index: sqlite-vec (leaning) vs LanceDB vs Chroma
+- ~~Vector index~~ DECIDED: sqlite-vec v0.1.9 + FTS5. Currently dormant in production.
 - ~~LLM provider~~ DECIDED: OpenAI-compatible API (`openai` pkg + configurable
   base_url; cheap/strong model tiers; keys via env vars)
 - ~~Subagent framework~~ DECIDED: hand-rolled thin layer (single chat.completions
   call + agents/*.md prompt contracts + JSON proposal parsing; no LangGraph/SDK)
-- Scheduler: Windows Task Scheduler (leaning) vs resident daemon; cron after VPS move
+- ~~Scheduler~~ DECIDED: Resident daemon + single watchdog. Current 7 hidden tasks (6 domain jobs + 1 dashboard ONSTART) are a transitional stopgap, will be addressed in part-021.
 - ~~Reminder channel~~ DECIDED: Discord DM (INTERFACES.md §4); console during dev
 - Health metabolism parameters (decay rate, heal amount, trash retention) — tune in part-003
 - Channels are thin adapters with ZERO business logic and share `core/tools/` typed

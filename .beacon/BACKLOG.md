@@ -1,4 +1,4 @@
-﻿# Beacon Backlog
+# Beacon Backlog
 
 Backlog is non-executable. Promote work through PLAN, PART DESIGN, PART TODO, and CURRENT before implementation.
 
@@ -21,9 +21,9 @@ Summary: 已定案——**OpenAI 相容 API**：官方 `openai` 套件 + 可配�
 ### backlog-003: 排程器選型
 
 Type: question
-Status: triage
+Status: resolved (2026-07-31)
 
-Summary: Windows Task Scheduler（傾向，符合無狀態哲學）vs 常駐 daemon。影響 part-003 夜間 job 觸發方式。
+Summary: 已定案——**常駐 daemon + 單一 watchdog**。原 Windows Task Scheduler 方案產生 6 個 VBS 隱藏任務，難以管理與除錯，作為 stopgap 記錄。將於 part-021 實作 Resident Daemon Control Center。
 
 ### backlog-004: x-sync / fb-sync 抓取策略
 
@@ -268,3 +268,58 @@ Tailscale/內網反代過時);③LLM 只解析不對話——沒有意圖分類�
 查詢/排程/知識問答/建議/演練/閒聊)→ 分派既有 capability → 自然語言組裝回覆;
 Discord 開 recall;失敗/不明意圖友善追問而非「這不是行程/待辦」。**寫入鐵律不變**
 (提案→writer→確認);變的只是理解與表達層。成本:每則訊息多一次 cheap LLM 呼叫。
+
+### backlog-034: retrieve 查詢期 vault I/O 爆炸（P0-2）
+
+Type: performance / correctness
+Status: triage (priority: HIGH — 筆記數增長後每次查詢 800+ 次檔案讀取)
+
+Summary: `core/retrieve.py` 的 `_strong_index_hits` 與 `_stage_index` 在
+`include_evidence=False`（預設）時，對 INDEX registry **每一篇筆記**呼叫
+`ltm.read_note` 讀 frontmatter 判斷 `note_type`，808+ 篇 = 每次查詢 800+
+次檔案 I/O。`_note_path` 對 FTS 命中也重複解析 INDEX.md。
+修法：① registry 解析結果單次查詢只載入一次（快取 dict）；② `note_type`
+欄位加入 `note_map` 或 FTS 索引（查詢期零 vault I/O）。
+驗證：golden queries p50 latency baseline 比對。
+
+### backlog-035: facet 投影每晚全量重寫膨脹（P1-1）
+
+Type: performance
+Status: triage (priority: MEDIUM)
+
+Summary: `core/facets.py` `project_to_vault` 每晚對每個 active facet 無條件
+`write_note` + `mark_superseded`，即使內容完全沒變也會產生新版本 →
+vault/INDEX 無限膨脹。
+修法：寫入前以內容雜湊（body SHA-256）比對現有檔案，相同則 skip。
+驗證：連續兩次 `--job consolidate` 不多產新 facet 筆記。
+
+### backlog-036: `_link_same_topic` 字串精確比對漏連（P1-2）
+
+Type: correctness
+Status: triage (priority: MEDIUM)
+
+Summary: `core/consolidate.py` 的 `_link_same_topic` 用原始字串 exact match
+比對 topic，LLM 產出的 topic 微小漂移（大小寫、空白、標點）會靜默漏連，
+造成同主題 trace 斷裂。
+修法：寫入/比對前正規化（casefold + 去除非英數）；或改用 fuzzy key。
+驗證：同主題不同大小寫能正確連結。
+
+### backlog-037: consolidate 本機時區分組（P1-3）
+
+Type: portability
+Status: triage (priority: LOW — 台灣無 DST，僅遷 VPS 時觸發)
+
+Summary: `_group_by_day` / `_month_of` / `_bucket_of` 使用
+`datetime.fromtimestamp`（本機時區），遷到有 DST 的時區會分組飄移。
+修法：與 B9（KNOWN_ISSUES.md）一起收入 VPS checklist；或 config 釘 TZ 常數。
+
+### backlog-038: deterministic `doctor` 對帳工具（P2）
+
+Type: observability
+Status: triage (priority: MEDIUM)
+
+Summary: 缺少一條命令快速驗證「vault topic 數 vs note_map 行數 vs INDEX
+registry 行數 vs transcript JSONL/.idx 行數」是否一致。K2 類污染（測試資料
+混入正式索引）需靠手動 grep 才發現。
+修法：新增 `python -m core.stm doctor`（純讀、確定性），輸出各計數及差異。
+驗證：在已知 K2 修復前的 index.db 能報出不一致。

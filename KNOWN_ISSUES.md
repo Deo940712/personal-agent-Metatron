@@ -1,10 +1,37 @@
-﻿# KNOWN ISSUES — 反查稽核報告
+# KNOWN ISSUES — 反查稽核報告
 
 > 建立:2026-07-13(part-002-slice-002 完成後、slice-003 開工前的反查)
 > 方法:通讀五個模組 + **探針腳本實證**(每個問題都有實際重現,不是猜測)。
 > 狀態欄:`open` = 未修;`fix@NNN` = 排定在該 slice 修;`accepted` = 已知並接受。
 
 ## 嚴重度 HIGH(會 crash 或資料毒化,slice-003 開工前必修)
+
+### K1 `fixed@018-3` malformed YAML migration 覆寫原 metadata
+
+- **重現**：frontmatter 含 PyYAML 無法解析的純量時，`load_frontmatter()` 捕捉
+  `yaml.YAMLError` 後回傳 `{}`；後續 migration 加入 KB 2.0 欄位並 save，原 metadata
+  被覆寫成只剩 `note_type`／`evidence_status`。
+- **實證範圍**：807 篇 current/backup 全量比對後，正文 807 篇均未變；804 篇 metadata
+  完整；受損精確為 `20260530-metaai-點評這部的親情感人嗎.md`、
+  `20260604-metaai.md`、`20260713-evm-新手開發路線.md`，三者 backup 完整。
+- **修法**：parse failure fail-closed 並回報檔名；紅測試先行；只從 backup 精準恢復
+  3 篇，不 broad rollback 其餘 804 篇；rollback 同時移除本次 migration 新建 Topic files。
+- **驗證**：migration suite 10 passed；807/807 current/backup 比對無正文差異，804 篇
+  metadata 無遺失，3 篇受損筆記已精準恢復並保留 KB 2.0 欄位。
+
+### K2 `fixed@018-3` 暫存 vault 的蒸餾測試污染正式衍生索引
+
+- **重現**：`consolidate.run(vault=tmp_path/"vault", ...)` 會建立測試筆記，但
+  `_distill_batch()` 固定呼叫 `vindex.upsert(config.INDEX_DB, ...)`；完整測試後正式
+  `index.db` 留下 `d1`／`d2`／`day-1`／語言偏好等 10 個 fixture IDs。
+- **影響**：權威 vault 未受損，但 Topic-first 的正式衍生索引由 5 筆變成 15 筆，
+  一般檢索可能回傳不存在於正式 vault 的測試資料。
+- **修法**：`consolidate.run()` 接受可注入 `idx_db` 並傳入 `_distill_batch()`；
+  `consolidate.run()`／`curate.run()` 在自訂 vault 且省略 idx_db 時，配對使用
+  `vault.parent/index.db`；production 同時省略 vault/index 時仍使用 `config.INDEX_DB`。
+- **回歸**：`test_run_uses_injected_index_without_touching_production` 驗證暫存 index
+  可檢索新筆記，production sentinel 不建立；Scout→Curate E2E 亦驗證相同契約；
+  consolidate/routine 45 tests 與 curate/scout/recall 57 tests 通過。
 
 ### B1 `fixed@002-3` update 空 fields → SQL 語法錯誤 crash
 
@@ -47,7 +74,7 @@
 - **緩解**(slice-003 實作):orchestrator 只接受 done/cancel 的 target ∈ 本次注入的 active_items id 清單;不在清單 → 降級為需確認
 - **殘餘風險**:接受(單人系統、行程可自行改回)
 
-### B7 `partial@002-3` `db=None` 預設指向生產 DB——測試/新程式碼忘帶 db 就寫真資料
+### B7 `planned@020` `db=None` 預設指向生產 DB——測試/新程式碼忘帶 db 就寫真資料
 
 - **重現**:`llm.complete(...)`(不帶 db)→ `stm.event_append(None,...)` → 寫進 `config.STATE_DB`
 - **分析**:CLI 情境是 feature,內部模組是 footgun。slice-002 測試都有帶 db 所以沒炸,但未來忘一次就污染生產 events
@@ -67,7 +94,7 @@
 
 ## 嚴重度 LOW(觀測性/衛生)
 
-### B10 `open` `connect()`/`existing_tables()` 對不存在路徑會靜默建空檔
+### B10 `planned@020` `connect()`/`existing_tables()` 對不存在路徑會靜默建空檔
 
 - sqlite 預設行為:connect 即建檔 → 打錯路徑得到 0 表空 DB 而非報錯
 - **修法**:connect 加 `require_exists=True` 參數(init 除外);或 URI `mode=rw`
@@ -194,3 +221,42 @@ Hands-on QA 實證 1 個使用者可見歧義，當場修正並加入 regression
   `done schedule 1`；編號只存在一表時保留既有 `done 1` 相容行為。
 - regression:`tests/test_tools.py::test_complete_rejects_ambiguous_unqualified_id_and_accepts_explicit_kind`
   與 `tests/test_chat.py::test_done_collision_requires_explicit_kind`。
+
+## Audit 記錄(2026-07-24, ad-hoc code review — 文件整理 session)
+
+對未提交變更(26 檔 / +753 行)做 ad-hoc code review,實跑 162 個相關測試全綠;
+發現 2 個 Warning + 2 個中低。**本次僅記錄,程式修復待使用者指示**:
+
+### W1 `planned@020` dashboard `_read_json` 無 Content-Length 邊界檢查 → 單執行緒伺服器可被阻塞
+
+- **重現**:`channels/dashboard.py` `_read_json` 直接 `int(headers.get("Content-Length"))`
+  後 `rfile.read(length)`;負值(如 `-1`)通過 `int()`,而 `rfile.read(-1)` 語意是
+  「讀到 EOF」→ 客戶端不關連線就永久卡住,單執行緒 HTTPServer 整台阻塞。
+- **影響**:part-016 開放寫入面(POST /api/done、/api/confirm)才引入的新攻擊面;
+  綁 127.0.0.1 風險限本機,但任何本機程式都可觸發。
+- **修法**:`length` 加 `0 < length <= 65536` 邊界檢查,越界直接 400;補 boundary
+  測試(負值/零/超大/非數字)。
+
+### W2 `planned@020` dashboard confirm 鏈不傳 `idx_db` → 自訂 vault 情境污染正式索引(K2 同型)
+
+- **重現**:dashboard confirm route → `core.chat.confirm(...)` → writer 落地
+  note_write 時 `vindex.upsert` 使用預設 `config.INDEX_DB`;dashboard 若以自訂
+  vault 啟動(測試/多 vault 情境),確認的筆記會寫進正式 `index.db`。
+- **分析**:與 K2(consolidate/curate 已修)同型——K2 的「自訂 vault 必配
+  `vault.parent/index.db`」配對規則未套用到 `chat.confirm` 呼叫鏈。
+- **修法**:serve/route 層把 `idx_db` 一路傳進 confirm;或在 `chat.confirm` 層
+  統一套用 K2 配對規則。regression 比照 K2 模式(production sentinel 不建立)。
+
+### M1 `open` migrate_kb_2_0 per-file except 漏 `UnicodeDecodeError`
+
+- **重現**:`scripts/migrate_kb_2_0.py` 逐檔 try/except 未捕 `UnicodeDecodeError`,
+  壞編碼檔會讓整批 migration 中途炸掉——已處理檔案已改、其餘沒跑,停在中間態。
+- **修法**:per-file except 補 `UnicodeDecodeError`,記檔名後繼續;或讀檔加
+  `errors="replace"` 並產出警告清單。
+
+### M2 `planned@020` dashboard 以中文文案 `startswith("✔")` 判 confirm 結果
+
+- **重現**:`channels/dashboard.py` confirm/done 後用 `reply.text.startswith("✔")`
+  判斷成功與否——API 契約耦合在顯示文案上,改文案就靜默翻轉行為。
+- **修法**:`Reply` 補結構化 outcome 欄位(如 `ok: bool`),channel 只讀欄位不
+  解析文案。

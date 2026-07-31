@@ -42,7 +42,7 @@
 | 本週行程 | `schedule.week` | — | Discord, MCP | `read` | DB1 | `core.tools.schedule.week` |
 | 自然語言行程提案 | `schedule.propose` | `schedule` | CLI, Discord, MCP | `propose` | DB1 pending → writer | `core.tools.schedule.propose` |
 | 新增待辦提案 | `tasks.propose` | `schedule` | CLI, Discord, MCP | `propose` | DB1 pending → writer | `core.tools.tasks.add` |
-| 完成行程或待辦 | `tasks.complete` | — | Discord, MCP | `auto_apply` | DB1 via writer；跨表撞號需明確指定 kind | `core.tools.tasks.complete` |
+| 完成行程或待辦 | `tasks.complete` | — | Discord, Dashboard, MCP | `auto_apply` | DB1 via writer；跨表撞號需明確指定 kind | `core.tools.tasks.complete` |
 | 專案進度 | `projects.status` | — | Discord, Dashboard, MCP | `read` | DB1 | `core.tools.projects.status` |
 | 知識庫問答 | `memory.recall` | `recall` | CLI, MCP | `read` | vault, index, cold transcript | `core.tools.memory.query` |
 | 記憶回水 | `memory.rehydrate` | `recall` | CLI, MCP | `read` | vault, cold transcript | `core.tools.memory.rehydrate` |
@@ -57,6 +57,10 @@
 | 情境演練 | `scenario.rehearse` | `scenario` | CLI | `read`(非權威產物) | vault/scenarios（subprocess 隔離） | `python -m core.scenario rehearse <template>` |
 | Threads 同步 | `skill.threads_sync` | — | CLI, scheduler | `job` | vault, skill data | `skills.runner:threads_sync` |
 
+Dashboard 的 `GET /api/pending` 是 channel 唯讀投影；`POST /api/confirm` 復用
+`core.chat.confirm`（`pending_claim` → writer 重驗 → commit），不是新增第二個 apply
+capability。兩者因此不另立 catalog 名稱，避免把 adapter route 誤當共用能力。
+
 ## 兩種 tool 名詞
 
 1. **Capability tools（本文件）**：介面共用的使用者能力邊界。
@@ -64,9 +68,9 @@
    `rehydrate` 唯讀白名單，定義於 `agents/recall.md` 與 `core/recall.py`。
 
 兩者不能混為「所有函式皆可讓 LLM 呼叫」。MCP(part-006 已實作)只包裝 catalog
-明確暴露的 capability——`core/mcp/tools.py` 十個工具:`schedule_list`/
+明確暴露的 capability——`core/mcp/tools.py` 十一個工具:`schedule_list`/
 `schedule_add`/`task_list`/`task_add`/`confirm`/`project_status`/`dev_status`/
-`session_tail`/`directive_list`/`directive_push`,經 stdio(`channels/mcp_stdio.py`)
+`dev_plan`/`session_tail`/`directive_list`/`directive_push`,經 stdio(`channels/mcp_stdio.py`)
 與 Tailscale HTTP(`channels/mcp_http.py`,bind guard fail-closed)兩種傳輸暴露;
 寫入類工具回 pending 預覽,`confirm` 走 `pending_claim` 原子認領。agent internal
 allowlist 仍由程式碼硬控。
@@ -74,10 +78,16 @@ allowlist 仍由程式碼硬控。
 ## Control plane 與 data plane
 
 - Metatron/orchestrator：路由、派工、跨 agent 衝突與最終整合。
-- Capability gateway：依 agent/interface allowlist、scope、budget、timeout 執行工具。
+- Capability gateway：目前由 static catalog, handlers, application boundary, 與 writer 組成。未來可能新增 minimal dispatcher，記錄 caller, scope, budget, timeout, 與 result logging。
 - Writer：對 shared-state mutation 做 validator、確認閘門與 commit。
 
 因此子 agent 可直接呼叫被授權的 `read`／`propose`／`auto_apply` capability，無需
 讓 orchestrator 代辦每次 tool call；但 `auto_apply` 仍經 writer，且 confirm-required
 操作仍 preview→confirm→commit。未來若新增 agent tool，必須同時指定 scope、最大
 呼叫量及 allowed proposal types。
+
+## 未來規劃 (Planned)
+
+- **Phase 20 (Observability)**: 新增系統健康值、監控、日誌等可視化功能。
+- **Phase 21 (Job Control)**: 新增 allowlisted 操作控制（如 trigger, pause, resume），透過 loopback-first 機制，回傳結構化結果，不允許任意指令輸入，遠端存取必須透過 Tailscale/auth 設計。
+- **Supervisor Actions**: 未來可能新增 supervisor actions，目前尚未開放。

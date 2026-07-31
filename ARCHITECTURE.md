@@ -96,7 +96,7 @@ flowchart TD
 
 ```text
 Metatron/orchestrator  = control plane:路由、派工、跨 agent 衝突、最終整合
-Capability gateway     = policy plane:allowlist、scope、budget、timeout、audit
+Capability gateway     = policy plane:allowlist、scope、budget、timeout、audit (現行靜態 catalog/handlers/application/writer 實作；最小化 dispatcher 規劃中)
 Deterministic writer   = data plane:validate → confirm → commit(唯一寫入邊界)
 ```
 
@@ -245,7 +245,7 @@ flowchart LR
 | CLI | 開發、排程 job | 讀+寫 | ✅ |
 | Obsidian | 知識庫閱讀/編輯 | 讀+寫(vault) | ✅ 零成本 |
 | Discord bot(私人 server,鎖 user ID) | 出門:提醒推播 + 排事情 | 讀+寫(走 writer+確認) | ✅ 程式面 |
-| 網頁儀表板(stdlib http.server,127.0.0.1:7777) | 在家:總覽 + 系統健康 | **唯讀**(GET-only + `mode=ro` + 零寫入呼叫) | ✅ |
+| 網頁儀表板(stdlib http.server,127.0.0.1:7777) | 在家:總覽 + 受限操作 | **受限互動**(GET 唯讀 + POST /api/done、/api/confirm 走 writer) | ✅ |
 | MCP server(stdio + Tailscale HTTP) | OpenCode 內查詢/排程/遠端開發迴圈 | 讀+寫(寫走 pending 確認) | ✅ 程式面 |
 
 鐵律:channel = 薄 adapter 零業務邏輯，共用 `core/tools/` 能力層；統一入口
@@ -918,7 +918,7 @@ my-agent/
 │   ├── scout.py          ✅ # 知識偵察(part-008):allowlist/fetch_and_land/觸發收集/run
 │   ├── scenario.py       ✅ # 情境演練(part-010):bucket firewall/subprocess runner/templates/CLI
 │   ├── tools/            ✅ # 能力層(part-006):catalog/contracts/schedule/tasks/projects/memory
-│   └── mcp/tools.py      ✅ # MCP 工具定義(與傳輸無關):10 工具含 dev_status/directives
+│   └── mcp/tools.py      ✅ # MCP 工具定義(與傳輸無關):11 工具含 dev_status/dev_plan/directives
 ├── agents/                  # 子 agent 契約:prompt + 輸出 schema + few-shot
 │   ├── schedule.md       ✅ # 行程解析(rrule/remind 預設/evidence=原句)
 │   ├── consolidator.md   ✅ # 蒸餾(episodic/preference/topic/supersedes/facet_key)
@@ -931,7 +931,8 @@ my-agent/
 │   ├── discord_bot.py    ✅ # 白名單 fail-closed/按鈕/DM/延遲 import
 │   ├── mcp_stdio.py      ✅ # 本機 stdio MCP(OpenCode spawn,零網路)
 │   ├── mcp_http.py       ✅ # 遠程 HTTP JSON-RPC(bind guard fail-closed:僅 loopback/RFC1918/Tailscale)
-│   └── dashboard.py      ✅ # 唯讀儀表板(stdlib http.server;127.0.0.1:7777;GET-only+mode=ro)
+│   ├── dashboard.py      ✅ # 受限互動儀表板(stdlib http.server;127.0.0.1:7777;GET ro + POST done/confirm 走 writer)
+│   └── dashboard_page.py ✅ # 儀表板 HTML 模板(esc() 防 XSS)
 ├── skills/                  # 非 LLM 抓取管線(純 CLI)
 │   ├── runner.py         ✅ # skill 執行器(五步驟/login_expired 判定/DB1 記錄)
 │   ├── threads_sync_vendor/ ✅ # vendored clone(pin commit;VENDORED.md;零修改黑箱)
@@ -942,8 +943,9 @@ my-agent/
 ├── experiments/             # 隔離實驗(不進 core;task_capsule = part-003.2 可丟棄原型)
 ├── tools/                ✅ # 排程註冊(schedule_jobs.ps1 / run_job.cmd)
 ├── config.py             ✅ # 所有路徑與參數;秘密走 *_ENV 環境變數名
-├── docs/                 ✅ # MEMORY-{zh,en}(記憶契約)/TOOLS(能力矩陣)/ECC 實驗報告
-├── tests/                ✅ # 852 tests
+├── scripts/             ✅ # migrate_kb_2_0.py / kb_2_0_seed.py(KB 2.0 遷移/種子)
+├── docs/                 ✅ # MEMORY-{zh,en}/TOOLS/USER-GUIDE-zh/CHEATSHEET-zh/OVERVIEW-zh/ECC 報告
+├── tests/                ✅ # 961 tests
 └── data/                    # (在 DATA_DIR,OneDrive 外,不 commit)
     ├── state.db             # DB1
     ├── index.db             # 向量索引(衍生物)
@@ -956,7 +958,12 @@ my-agent/
 ```mermaid
 flowchart LR
     P1["✅ Phase 1<br/>schema + CRUD CLI"] --> P2["✅ Phase 2<br/>Orchestrator + writer<br/>+ schedule + remind"] --> P25["✅ Phase 2.5<br/>Discord bot<br/>兩階段確認"] --> P3["✅ Phase 3<br/>記憶核心:冷儲存/代謝<br/>/蒸餾/檢索"] --> P4["✅ Phase 4<br/>threads-sync runner<br/>+ curator + recall"] --> P45["✅ Phase 4.5<br/>記憶強化:主題trace<br/>/supersede/RRF"] --> P5["✅ Phase 5<br/>coding_tracker<br/>三源"] --> P6["✅ Phase 6<br/>MCP:遠端開發迴圈<br/>stdio + Tailscale HTTP<br/>(VPS 真機 QA 待環境)"]
-    P3 -.-> P35["✅ Phase 3.5<br/>唯讀儀表板"]
+    P6 --> P7["✅ Phase 7-11<br/>自適應助理層<br/>+ 收尾接線"]
+    P7 --> P12["✅ Phase 12-18<br/>router/x-fb probe/dashboard<br/>常駐/筆記工具/KB 2.0"]
+    P12 --> P19["🚧 Phase 19<br/>Evidence 批次 Topic 化"]
+    P19 --> P20["📋 Phase 20<br/>系統可靠性與可操作性"]
+    P20 --> P21["📋 Phase 21<br/>常駐 Supervisor 與 Watchdog"]
+    P3 -.-> P35["✅ Phase 3.5<br/>儀表板"]
 ```
 
 | Phase | Gate(驗收條件) | 狀態 |
@@ -967,26 +974,37 @@ flowchart LR
 | 3 | 低健康 events 蒸餾後出現在 vault 且可檢索;rehydrate 能沿 source_ids 讀回原文 | ✅ 端到端實跑 |
 | 4 | threads-sync 例行同步跑通;curator 評分閘門+去重;recall 帶引用答對 | ✅ 2026-07-13(mock 端到端;真同步 QA 待 session) |
 | 4.5 | 主題 trace 連結生效;supersede 落地(舊筆記標記);RRF 檢索過 golden queries | ✅ 2026-07-13 |
-| 5 | coding_tracker 三源掃描自動更新 projects 表 | ✅ 2026-07-13(真三源實跑) |
-| 3.5 | localhost:7777 七版塊有真資料;儀表板物理唯讀(GET-only + `mode=ro` + 零寫入呼叫) | ✅ 2026-07-16(端到端 HTTP smoke) |
+| 5 | coding_tracker 三源掌描自動更新 projects 表 | ✅ 2026-07-13(真三源實跑) |
+| 3.5 | localhost:7777 七版塊有真資料;儀表板受限互動(GET 唯讀 + POST done/confirm 走 writer) | ✅ 2026-07-16(端到端 HTTP smoke) |
 | 6 | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到;排行程跨介面確認 | ✅ 程式面 2026-07-16(630 tests + smoke;VPS+Tailscale 真機 QA 待環境,backlog-008) |
 | 7 | 證據驅動 facets(單次不 stable;pin/forget 硬覆蓋;supersede 雙側保留);active facets 投影 vault 且 recall 可見 | ✅ 2026-07-19(端到端:偏好事件→蒸餾→facet→投影) |
 | 9 | world-diff quiet-tick 零 LLM;有變化產可過期 advice(四重防疲勞);action 走確認;校準回饋成 facet | ✅ 程式面 2026-07-19(真 Discord QA 待 token) |
 | 8 | allowlist fail-closed;抓取帶溯源+external_untrusted;注入內容零寫入;只觸發條件研究;端到端 fetch→curate→recall | ✅ 2026-07-19(真網路抓取 QA 待來源) |
+| 10 | crowd-scenario subprocess 隔離; bucket firewall; non_authoritative 硬標; vault/scenarios/ 產出 | ✅ 2026-07-19 |
+| 11 | 跨 part 接線(routine completed-event → facet → advisor 偏離; 校準降頻; new_knowledge) | ✅ 2026-07-19 |
+| 12 | router intent 分類(對話式; fallback 保守) | ✅ 2026-07-19 |
+| 13 | 對話層新增 directive + knowledge_list 意圖 | ✅ 2026-07-19 |
+| 14 | MCP dev_plan（第 11 工具）+ 儀表板 ONSTART 常駐 | ✅ 2026-07-19 |
+| 15 | 知識庫 CRUD + 三層下鑽 + INDEX 中文化 | ✅ 2026-07-20 |
+| 16 | 能力速查 + 互動儀表板受限操作(done/confirm 走 writer) | ✅ 2026-07-21 |
+| 17 | LLM transient model failover hotfix | ✅ 2026-07-21 |
+| 18 | KB 2.0 Topic/Evidence 雙層 + migration | ✅ 2026-07-24 |
+| 19 | Evidence 批次 Topic 化 | 🚧 slice-001 executable；閘門 A 已通過，Pilot 分群提案停在閘門 B 待使用者確認 |
 
 自適應助理層(§15)part-007/008/009/010 **全部已實作**。part-011（收尾接線）補完
 跨 part 迴圈:作息 completed 事件 → routine facet → advisor 偏離;advisor 校準降頻;
-world-diff new_knowledge 訊號。見 §15 與 `.beacon/PLAN.md`。
+world-diff new_knowledge 訊號。完整時間線與各 part 詳細見 [`.beacon/PLAN.md`](.beacon/PLAN.md)。
 
 ## 11. 開放決策(實作前定案)
 
 - ~~向量索引選型~~ 已定案:**sqlite-vec v0.1.9**(本機實測 KNN OK)+ **FTS5**。
-  檢索自 part-004.5 起為:強 index 命中短路 → INDEX/FTS5/向量三段並行 + RRF 融合
-  (k=60)→ rehydrate(§6.4)。embedding 走 OpenAI 相容 `/v1/embeddings`
+  檢索自 part-004.5 起為:強 index 命中短路 → INDEX/FTS5 兩段並行 + RRF 融合
+  (k=60)→ rehydrate(§6.4)。向量 KNN 程式已實作但 production 未接線（dormant,
+  見 docs/MEMORY-zh.md §4.1 註記）。embedding 走 OpenAI 相容 `/v1/embeddings`
   (EMBED_BASE_URL 可獨立於 LLM 端點)
 - ~~LLM 供應商~~ 已定案:**OpenAI 相容 API**(`openai` 套件 + 可配置 base_url;
   兩檔模型分級 cheap/strong;key 走環境變數)
-- 排程器:Windows Task Scheduler(傾向)vs 常駐 daemon;遷 VPS 後改 cron
+- ~~排程器~~ 最終目標為**常駐 supervisor 執行面 + 單一 Windows Task Scheduler watchdog**；目前過渡狀態已驗證**已實作**（6 個 job 與 dashboard ONSTART 註冊為 hidden tasks 透過 `wscript -> tools/run_job_hidden.vbs -> run_job.cmd hidden` 執行）；遷 VPS 後改常駐 daemon + systemd/cron watchdog。未來常駐 daemon 為 supervisor-only 執行面（排程/鎖定/spawn/觀測/日誌），不持有對話狀態，也不遷移領域邏輯。
 - ~~子 agent 執行框架~~ 已定案:**自寫薄層**(單次 chat.completions + agents/*.md
   prompt 契約 + JSON 提案解析;不用 LangGraph/SDK)
 - ~~提醒通知管道~~ 已定案:**Discord DM**(私人 server;INTERFACES.md §4);本機開發期用 console 過渡
@@ -1029,7 +1047,7 @@ world-diff new_knowledge 訊號。見 §15 與 `.beacon/PLAN.md`。
 | Indexing | 穩定 ID + 受控 tag 詞彙表 + INDEX/MOC 一行描述 + 向量索引(衍生物) |
 | Updating | STM:直接 UPDATE;DB2:新增修正筆記 + superseded_by 鏈;結構化參數走 slot 版本鏈 |
 | Forgetting | 健康值代謝:命中回血、久不用衰減、歸零進垃圾桶;免疫類別不衰減;原始記錄永不刪 |
-| Retrieval | 強 index 命中短路 → INDEX/FTS5/向量三段並行 + RRF 融合(k=60)→ rehydrate 回水(命中觸發 health 回血) |
+| Retrieval | 強 index 命中短路 → INDEX/FTS5 兩段並行 + RRF 融合(k=60)→ rehydrate 回水(命中觸發 health 回血)；向量段 dormant 見 docs/MEMORY-zh.md §4.1 |
 | Compression | 蒸餾時 LLM 摘要,必帶 source_ids;原文轉冷儲存 |
 
 ## 14. 對抗肥大的三個硬規則
@@ -1044,9 +1062,9 @@ world-diff new_knowledge 訊號。見 §15 與 `.beacon/PLAN.md`。
 > 助理——但**不變成 OpenHuman 式常駐自主 agent**。「活」= 定期醒來看變化、產可過期建議、
 > 真實行動仍走確認,不是背景無限自我思考、不是自主改狀態。設計依據見各 part DESIGN。
 >
-> **狀態(2026-07-19)**:Personal Model(part-007)、Knowledge Scout(part-008)、
+> **狀態(2026-07-24)**:Personal Model(part-007)、Knowledge Scout(part-008)、
 > Proactive Advisor(part-009)、Scenario Rehearsal(part-010)**四塊全部已實作**
-> (852 tests,端到端 QA 通過)。part-011 補完跨 part 接線(作息迴圈 / 校準降頻 /
+> (961 tests,端到端 QA 通過)。part-011 補完跨 part 接線(作息迴圈 / 校準降頻 /
 > new_knowledge 訊號),死程式碼 extract_routine 復活。
 
 ### 15.1 四個能力(在既有安全邊界內)

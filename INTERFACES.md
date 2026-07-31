@@ -1,9 +1,9 @@
 # MY AGENT — 使用介面文件(前端/後端)
 
-> 本文件是介面層的設計權威;核心架構見 [ARCHITECTURE.md](ARCHITECTURE.md)。
-> 鐵律:**介面 = 薄 adapter,零業務邏輯**。使用者能力共用 `core/tools/` typed
+> 本文件是介面層的設計權威；核心架構見 [ARCHITECTURE.md](ARCHITECTURE.md)。
+> 鐵律：**介面 = 薄 adapter，零業務邏輯**。使用者能力共用 `core/tools/` typed
 > capability layer；權限與暴露矩陣見 [docs/TOOLS.md](docs/TOOLS.md)。統一
-> `application.invoke` 入口排在 part-006 slice-001，尚未宣稱已完成。
+> `application.invoke` 入口已於 part-006 slice-001 實作完成。
 > channel 的長連線／UI session 只是 transport boundary；每則訊息仍建立獨立 core
 > run。session 摘要與 OpenCode 對話只能作觀測訊號，不能取代 DB1/Beacon/vault
 > 權威狀態。記憶契約見 [docs/MEMORY-zh.md](docs/MEMORY-zh.md)。
@@ -15,8 +15,10 @@
 | CLI | 開發、排程 job 入口 | 讀+寫 | 否(單次行程) | Phase 1-2 |
 | Obsidian | 知識庫閱讀/編輯(vault 本身就是 UI) | 讀+寫(vault) | 使用者自開 | 零成本 |
 | Discord bot | **出門**:提醒推播 + 排事情 + 快查 | 讀+寫(走 writer+確認) | 是(薄,無狀態) | Phase 2.5 |
-| 網頁儀表板 | **在家**:一眼總覽 + 系統健康 | **唯讀** | 是(唯讀) | Phase 3.5 |
-| MCP server | OpenCode / Claude Code 內查詢 | 唯讀優先 | 是 | Phase 6 |
+| 網頁儀表板 | **在家**:一眼總覽 + 受限操作 | **受限互動**(GET ro + POST done/confirm) | 是 | Phase 3.5 + 16 |
+| MCP server | OpenCode / Claude Code 內查詢/排程 | 讀+寫(寫走 pending) | 是 | Phase 6 |
+| Observability | **在家**:健康值 + 監控 | **受限互動**(GET ro) | 是 | Phase 20 (Planned) |
+| Job Control | **在家**:排程 CLI 介面 | **受限互動**(POST allowlisted) | 是 | Phase 21 (Planned) |
 
 分工一句話:**Obsidian 看知識、網頁看狀態、Discord 出門用、CLI 開發用、MCP 給其他 AI 用**。
 
@@ -27,8 +29,8 @@ flowchart TD
     subgraph CHANNELS["channels/ (薄 adapter,零業務邏輯)"]
         CLI["cli<br/>argparse 入口"]
         DC["discord_bot.py<br/>常駐;收訊→轉發→回摘要"]
-        WEB["dashboard.py<br/>FastAPI 唯讀,127.0.0.1"]
-        MCP["mcp_server.py<br/>Phase 6"]
+        WEB["dashboard.py<br/>stdlib http.server 受限互動,127.0.0.1"]
+        MCP["mcp_stdio.py / mcp_http.py<br/>✅ Phase 6 已實作"]
     end
     OBS["Obsidian<br/>(直接開 vault,不經 core)"]
 
@@ -120,24 +122,27 @@ sequenceDiagram
 
 待確認提案存 DB1(新增輕量表或 cursors 复用,part-002.5 DESIGN 定)——bot 重啟不丟待確認項。
 
-## 5. 網頁儀表板(Phase 3.5,唯讀)
+## 5. 網頁儀表板(Phase 3.5 + part-016 受限互動)
 
 ### 5.1 定位
 
-- **唯讀**。不做寫入:寫入會繞過預覽+確認流,且需認證/表單驗證,複雜度暴增
-- 給「一眼總覽」:Obsidian 看不到的系統狀態(管線健康、記憶代謝、執行記錄)
-- 借鑑 memory-river `mr-dash`:唯讀、綁 127.0.0.1、永不改資料
+- **讀為主、寫入白名單**：只允許 `done`（架構既定 auto-apply）與 pending
+  確認/取消；新增/修改行程、待辦、筆記仍由 Discord/CLI/MCP 發起。
+- 寫入不碰 SQL：`done` → `core.tools.tasks.complete` → writer；confirm →
+  `core.chat.confirm` → `pending_claim` → writer 重驗後落地。
+- 給「一眼總覽」：管線健康、記憶代謝、執行記錄、pending、活動時間線。
+- 借鑑 memory-river `mr-dash` 的 loopback/讀路徑隔離；GET 仍用 `mode=ro`。
 
 ### 5.2 技術
 
 | 項 | 選 | 理由 |
 |---|---|---|
-| 後端 | FastAPI(`channels/dashboard.py`) | Python 同棧、自帶 OpenAPI |
-| 前端 | **一頁靜態 HTML + htmx**(或原生 fetch) | 一頁儀表板上 React 就是肥大的開始 |
+| 後端 | stdlib `http.server` (`channels/dashboard.py`) | 零依賴、route 純函式可測 |
+| 前端 | 一頁靜態 HTML + 原生 fetch (`dashboard_page.py`) | 不引入 React/build chain |
 | 綁定 | `127.0.0.1:7777`,無登入 | 本機自用;遷 VPS 後要遠端看再加 Tailscale/basic auth |
-| 資料存取 | 唯讀 SQLite 連線(`mode=ro`)+ 唯讀讀 vault | 物理上不可能寫壞資料 |
+| 資料存取 | GET=`mode=ro`;POST=typed capability / confirm gate | 查詢與寫入路徑物理分離 |
 
-### 5.3 API(全部 GET,唯讀)
+### 5.3 API
 
 | 端點 | 回傳 | 來源 |
 |---|---|---|
@@ -147,20 +152,24 @@ sequenceDiagram
 | `GET /api/pipelines` | 各 sync 管線最後成功時間 + cursor 狀態 | cursors, agent_runs |
 | `GET /api/memory` | events 統計:alive/trash/archived 數、健康值分布、inbox 待整理數 | events, vault |
 | `GET /api/events?limit=50` | 最近事件流 `[{ts,actor,action,summary}]` | events |
+| `GET /api/pending` | 待確認預覽 | pending_proposals (`mode=ro`) |
+| `GET /api/timeline?limit=40` | runs + events 合併時間線 | agent_runs, events |
 | `GET /health` | `{ok: true}` | — |
+| `POST /api/done` | 完成 task/schedule | `tasks.complete` → writer |
+| `POST /api/confirm` | approve/cancel pending | `chat.confirm` → writer |
 
 ### 5.4 頁面版塊(單頁)
 
 ```
 ┌─────────────────────────────────────────────┐
-│ 今日行程/待辦        │ 專案進度 (phase/blockers) │
+│ 今日行程/待辦 [完成] │ 待確認 [確認/取消]         │
 ├─────────────────────┼───────────────────────┤
 │ 管線健康             │ 記憶狀態                 │
 │ threads ✅ 昨23:00   │ alive 132 / trash 8     │
 │ x       ⚠ 3天未跑    │ inbox 待整理 17          │
 │ fb      — 未啟用     │ 健康值分布 ▁▃▆█           │
 ├─────────────────────┴───────────────────────┤
-│ 最近事件流 (events)  /  最近執行 (agent_runs)   │
+│ 活動時間線 (events + agent_runs)                │
 └─────────────────────────────────────────────┘
 ```
 
@@ -211,6 +220,6 @@ pending 在 DB1 共用 → MCP 發起、Discord 確認,跨介面一致。
 | 介面 phase | 依賴 | Gate | 狀態 |
 |---|---|---|---|
 | 2.5 Discord bot | Phase 2(orchestrator + writer 可用) | 手機發「明天開會」→ 預覽 → ✅ → DB1 有列;提醒 DM 收得到 | ✅ 程式面(真連線 QA 待 token) |
-| 3.5 儀表板 | Phase 3(events/健康值有資料可看) | 開 localhost:7777 五版塊有真資料;寫入嘗試被 405 拒 | 📋 可插隊 |
-| 6 MCP slice-1(stdio) | 無硬依賴(directives/octools 自帶) | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到 | 📋 可插隊 |
-| 6 MCP slice-2(HTTP) | VPS + Tailscale | 遠端 OpenCode 全工具通;綁公網拒絕測試綠 | 📋 gate: VPS |
+| 3.5 儀表板 | Phase 3(events/健康值有資料可看) | localhost:7777 七版塊有真資料; POST done/confirm 走 writer | ✅ 程式完成 |
+| 6 MCP slice-1(stdio) | 無硬依賴(directives/octools 自帶) | `dev_status` 讀到真 session;`directive_push` → 新 session 開場讀到 | ✅ 程式完成 |
+| 6 MCP slice-2(HTTP) | VPS + Tailscale | 遠端 OpenCode 全工具通;綁公網拒絕測試綠 | ✅ 程式完成(VPS 真機 QA 待環境) |

@@ -227,7 +227,7 @@ Hands-on QA 實證 1 個使用者可見歧義，當場修正並加入 regression
 對未提交變更(26 檔 / +753 行)做 ad-hoc code review,實跑 162 個相關測試全綠;
 發現 2 個 Warning + 2 個中低。**本次僅記錄,程式修復待使用者指示**:
 
-### W1 `planned@020` dashboard `_read_json` 無 Content-Length 邊界檢查 → 單執行緒伺服器可被阻塞
+### W1 `fixed@020-1` dashboard `_read_json` 無 Content-Length 邊界檢查 → 單執行緒伺服器可被阻塞
 
 - **重現**:`channels/dashboard.py` `_read_json` 直接 `int(headers.get("Content-Length"))`
   後 `rfile.read(length)`;負值(如 `-1`)通過 `int()`,而 `rfile.read(-1)` 語意是
@@ -237,7 +237,7 @@ Hands-on QA 實證 1 個使用者可見歧義，當場修正並加入 regression
 - **修法**:`length` 加 `0 < length <= 65536` 邊界檢查,越界直接 400;補 boundary
   測試(負值/零/超大/非數字)。
 
-### W2 `planned@020` dashboard confirm 鏈不傳 `idx_db` → 自訂 vault 情境污染正式索引(K2 同型)
+### W2 `fixed@020-1` dashboard confirm 鏈不傳 `idx_db` → 自訂 vault 情境污染正式索引(K2 同型)
 
 - **重現**:dashboard confirm route → `core.chat.confirm(...)` → writer 落地
   note_write 時 `vindex.upsert` 使用預設 `config.INDEX_DB`;dashboard 若以自訂
@@ -254,7 +254,7 @@ Hands-on QA 實證 1 個使用者可見歧義，當場修正並加入 regression
 - **修法**:per-file except 補 `UnicodeDecodeError`,記檔名後繼續;或讀檔加
   `errors="replace"` 並產出警告清單。
 
-### M2 `planned@020` dashboard 以中文文案 `startswith("✔")` 判 confirm 結果
+### M2 `fixed@020-1` dashboard 以中文文案 `startswith("✔")` 判 confirm 結果
 
 - **重現**:`channels/dashboard.py` confirm/done 後用 `reply.text.startswith("✔")`
   判斷成功與否——API 契約耦合在顯示文案上,改文案就靜默翻轉行為。

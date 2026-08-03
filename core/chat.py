@@ -213,23 +213,24 @@ def confirm(pending_id: int, approve: bool, *, db: Path | None = None,
     """
     pending = stm.pending_get(db, pending_id)
     if pending is None:
-        return Reply("此確認已失效(找不到),請重發指令。")
+        return Reply("此確認已失效(找不到),請重發指令。", outcome="expired")
 
     # 原子認領:pending → applying。失敗 = 已被其他確認處理(或非 pending 態)
     if not stm.pending_claim(db, pending_id):
         current = stm.pending_get(db, pending_id)
         status = current["status"] if current else "expired"
         zh = _status_zh("done" if status == "applying" else status)
-        return Reply(f"此確認已{zh},請重發指令。")
+        return Reply(f"此確認已{zh},請重發指令。", outcome="already_handled")
 
     if not approve:
         stm.pending_finish(db, pending_id, "cancelled")
-        return Reply("已取消。")
+        return Reply("已取消。", outcome="cancelled")
 
     # 重驗後落地(writer.confirm_and_apply 內部重跑 precheck——audit A2'/A3')
     result = writer.confirm_and_apply(pending["proposal"], db, vault=vault, idx_db=idx_db)
     stm.pending_finish(db, pending_id, "done" if result.ok else "cancelled")
-    return Reply(f"{'✔ 已建立' if result.ok else '✘ ' + result.detail}")
+    return Reply(f"{'✔ 已建立' if result.ok else '✘ ' + result.detail}",
+                 outcome="confirmed" if result.ok else "rejected")
 
 
 def _status_zh(status: str) -> str:

@@ -80,10 +80,11 @@ def complete(reference: str, context: CapabilityContext) -> CapabilityResult:
             )
 
     if not precheck.ok:
-        return CapabilityResult(f"找不到 #{row_id} 或無法完成:{precheck.reason}")
+        return CapabilityResult(f"找不到 #{row_id} 或無法完成:{precheck.reason}", outcome="rejected")
     result = writer.apply_validated(precheck.proposal, context.db)
     mark = "✔" if result.ok else "✘"
-    return CapabilityResult(f"{mark} {result.detail}")
+    return CapabilityResult(f"{mark} {result.detail}",
+                            outcome="done" if result.ok else "rejected")
 
 
 def _done_proposal(

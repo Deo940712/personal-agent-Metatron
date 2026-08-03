@@ -6,6 +6,7 @@ mode=ro 物理唯讀。TestClient 不需要——直接測 route。
 """
 
 import json
+from io import BytesIO
 
 import pytest
 
@@ -39,6 +40,10 @@ def test_root_returns_html(db, vault):
     status, ctype, body = D.route("GET", "/", {}, db=db, vault=vault)
     assert status == 200 and ctype.startswith("text/html")
     assert "<html" in body.lower() and "儀表板" in body
+    assert "JSON.stringify(d, null, 2)" not in body
+    assert "活動時間線" in body and "待確認" in body
+    assert ".small{min-height:2.75rem" in body
+    assert "word-break:keep-all;overflow-wrap:anywhere" in body
 
 
 def test_health(db, vault):
@@ -98,6 +103,37 @@ def test_directives_panel(db, vault):
     assert any(d["text"] == "先跑 audit" for d in data)
 
 
+def test_pending_panel_returns_only_pending(db, vault):
+    proposal = {
+        "agent": "schedule", "proposal_type": "task_change", "target": "new",
+        "payload": {"action": "add", "fields": {"title": "買貓砂"}},
+        "confidence": 1.0, "evidence": ["todo 買貓砂"],
+    }
+    pending_id = stm.pending_add(db, proposal, "新增待辦：買貓砂")
+    done_id = stm.pending_add(db, proposal, "已處理")
+    stm.pending_set_status(db, done_id, "done")
+
+    data = _json(*D.route("GET", "/api/pending", {}, db=db, vault=vault))
+
+    assert [row["id"] for row in data] == [pending_id]
+    assert data[0]["preview"] == "新增待辦：買貓砂"
+
+
+def test_timeline_merges_runs_and_events(db, vault):
+    con = stm.connect(db)
+    con.execute(
+        "INSERT INTO agent_runs (started_at, finished_at, trigger, status, summary) "
+        "VALUES (?,?,?,?,?)", (100, 110, "chat", "ok", "knowledge:answered"))
+    con.commit()
+    con.close()
+    stm.event_append(db, "writer", "state_change", "task done")
+
+    data = _json(*D.route("GET", "/api/timeline", {"limit": "10"}, db=db, vault=vault))
+
+    assert {row["kind"] for row in data} == {"run", "event"}
+    assert data == sorted(data, key=lambda row: row["ts"], reverse=True)
+
+
 # ── 空 DB:回空陣列不炸 ──────────────────────────────────────────────
 
 def test_empty_db_returns_empty(db, vault):
@@ -127,9 +163,69 @@ def test_directives_missing_table_tolerated(tmp_path, vault):
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "DELETE", "PATCH"])
 @pytest.mark.parametrize("path", ["/api/today", "/api/directives", "/health", "/"])
-def test_non_get_returns_405(db, vault, method, path):
-    status, _ctype, _body = D.route(method, path, {}, db=db, vault=vault)
+def test_non_allowlisted_write_returns_405(db, vault, method, path):
+    status, _ctype, _body = D.route(method, path, {}, db=db, vault=vault, body={})
     assert status == 405
+
+
+def test_post_confirm_applies_pending_via_writer(db, vault):
+    proposal = {
+        "agent": "schedule", "proposal_type": "task_change", "target": "new",
+        "payload": {"action": "add", "fields": {"title": "買貓砂"}},
+        "confidence": 1.0, "evidence": ["todo 買貓砂"],
+    }
+    pending_id = stm.pending_add(db, proposal, "新增待辦：買貓砂")
+
+    data = _json(*D.route(
+        "POST", "/api/confirm", {}, db=db, vault=vault,
+        body={"pending_id": pending_id, "approve": True},
+    ))
+
+    assert data["ok"] is True
+    assert stm.task_list(db)[0]["title"] == "買貓砂"
+
+
+def test_post_confirm_rejects_bad_body(db, vault):
+    status, ctype, body = D.route(
+        "POST", "/api/confirm", {}, db=db, vault=vault,
+        body={"pending_id": True, "approve": "yes"},
+    )
+    assert status == 400 and ctype == "application/json"
+    assert json.loads(body)["ok"] is False
+
+
+def test_post_done_uses_capability_writer_path(db, vault):
+    task_id = stm.task_add(db, "買貓砂")
+
+    data = _json(*D.route(
+        "POST", "/api/done", {}, db=db, vault=vault,
+        body={"reference": f"task {task_id}"},
+    ))
+
+    assert data["ok"] is True
+    assert stm.task_list(db, status="done")[0]["id"] == task_id
+
+
+def test_post_done_rejects_bad_body(db, vault):
+    status, ctype, body = D.route(
+        "POST", "/api/done", {}, db=db, vault=vault, body={"reference": 3},
+    )
+    assert status == 400 and ctype == "application/json"
+    assert json.loads(body)["ok"] is False
+
+
+def test_handler_rejects_cross_site_post():
+    handler = object.__new__(D._Handler)
+    handler.headers = {"Content-Type": "application/json", "Sec-Fetch-Site": "cross-site"}
+    handler.rfile = BytesIO(b'{"reference":"task 1"}')
+    assert handler._read_json() is None
+
+
+def test_handler_requires_json_content_type():
+    handler = object.__new__(D._Handler)
+    handler.headers = {"Content-Type": "text/plain", "Content-Length": "22"}
+    handler.rfile = BytesIO(b'{"reference":"task 1"}')
+    assert handler._read_json() is None
 
 
 # ── 未知路徑 → 404 ───────────────────────────────────────────────────
@@ -156,6 +252,60 @@ def test_module_has_no_stm_write_calls():
     """dashboard 模組不呼叫任何 stm 寫入函式(靜態保證)。"""
     import inspect
     src = inspect.getsource(D)
-    for writer in ("schedule_add", "task_add", "directive_add", "project_set",
-                   "event_append", "pending_add", "cursor_set", "directive_consume"):
+    for writer in ("stm.schedule_add", "stm.task_add", "stm.directive_add", "stm.project_set",
+                   "stm.event_append", "stm.pending_add", "stm.cursor_set",
+                   "stm.directive_consume"):
         assert writer not in src, f"dashboard must not call stm.{writer}"
+
+
+# ── W1: Content-Length boundary checks ─────────────────────────────
+
+@pytest.mark.parametrize('raw_len, body, label', [
+    ('',        None, 'missing header'),
+    ('0',       None, 'zero'),
+    ('-1',      None, 'negative'),
+    ('9999999', None, 'oversize'),
+    ('abc',     None, 'non-numeric'),
+    ('22',      b'{"reference":"task 1"}', 'valid'),
+])
+def test_read_json_content_length_bounds(raw_len, body, label):
+    handler = object.__new__(D._Handler)
+    headers = {'Content-Type': 'application/json'}
+    if raw_len:
+        headers['Content-Length'] = raw_len
+    handler.headers = headers
+    if body is not None:
+        handler.rfile = BytesIO(body)
+    result = handler._read_json()
+    if body is not None:
+        assert result is not None, f'valid body should parse ({label})'
+    else:
+        assert result is None, f'invalid Content-Length returned {result!r} ({label})'
+
+
+# ── M2: structured outcomes ───────────────────────────────────────
+
+def test_confirm_uses_structured_outcome(db, vault):
+    proposal = {
+        'agent': 'schedule', 'proposal_type': 'task_change', 'target': 'new',
+        'payload': {'action': 'add', 'fields': {'title': 'M2 test'}},
+        'confidence': 1.0, 'evidence': ['todo test'],
+    }
+    pending_id = stm.pending_add(db, proposal, 'add M2')
+    data = _json(*D.route(
+        'POST', '/api/confirm', {}, db=db, vault=vault,
+        body={'pending_id': pending_id, 'approve': True},
+    ))
+    assert data['ok'] is True
+    assert data['outcome'] == 'confirmed'
+    assert stm.task_list(db)[0]['title'] == 'M2 test'
+
+
+def test_done_uses_structured_outcome(db, vault):
+    task_id = stm.task_add(db, 'done M2 test')
+    data = _json(*D.route(
+        'POST', '/api/done', {}, db=db, vault=vault,
+        body={'reference': f'task {task_id}'},
+    ))
+    assert data['ok'] is True
+    assert data['outcome'] == 'done'

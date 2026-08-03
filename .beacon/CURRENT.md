@@ -1,44 +1,45 @@
-﻿# CURRENT
+# CURRENT
 
-Status: executable
-Active part: part-018 Knowledge Base 2.0
-Active slice: slice-003 5 組整理實作（Seed Migration）
-Design: `.beacon/parts/part-018/DESIGN.md`
+Part: part-020
+Slice: slice-001
+Status: active — promoted 2026-08-03 (part-019 paused at Gate B, archived to `.beacon/done/part-019/`)
+Design authority: `.beacon/parts/part-020/DESIGN.md`
+TODO source: `.beacon/parts/part-020/TODO.md#slice-001`
 
-## Completed
+## Goal
 
-- slice-001: KB 2.0 migration script（`scripts/migrate_kb_2_0.py`）+ 8 tests
-  - Dry-run 驗證：807 evidence notes, 5 topic notes
-  - 處理 malformed YAML frontmatter
-  - Rollback 機制可運作
-  - 951 tests 通過
+Harden the existing `http.server` dashboard against malformed inputs (W1), isolate index DB access (W2), and replace localized text-prefix success detection with structured outcomes (M2).
 
-- slice-002: KB 2.0 topic-first retrieval
-  - retrieve.py: `include_evidence` flag（預設 False 只搜尋 topic）
-  - recall.py: 傳遞 `include_evidence` 到工具層
-  - memory.py: 偵測「搜原文」或「include evidence」啟用 evidence 搜尋
-  - 7 tests for topic/evidence filtering
-  - 958 tests 通過
+## Allowed Scope
 
-## Scope (slice-003)
+- [ ] Add `Content-Length` boundary checks in `channels/dashboard.py` `_read_json`: reject missing, zero, negative, or >65536 byte body with HTTP 400.
+- [ ] Ensure `idx_db` is passed through confirm path via `core/chat.confirm` → `writer.apply_validated` when custom vault is provided (W2).
+- [ ] Add structured `ok`/`code`/`message` fields to POST responses in `route()`; remove `startswith("✔")` success inference (M2).
+- [ ] Add unit tests covering boundary/malformed Content-Length, idx_db isolation, and structured outcomes.
+- [ ] Write operational probe script `scripts/probes/probe_dashboard_post_bounds.py` (new).
 
-使用新架構完成 21 篇原始貼文的整理，建立 5 篇 topic notes。
+## Files-scope
 
-## Verification
+- `channels/dashboard.py`
+- `tests/test_dashboard.py`
+- `scripts/probes/probe_dashboard_post_bounds.py` (new)
 
-- 人工檢查 5 篇 topic notes 內容正確涵蓋 21 篇原始貼文的重點
-- `INDEX.md` 正確顯示 5 篇 topic 為主索引
-- 958 tests 通過
+## Forbidden Scope
 
-## Files allowed
+- Do not migrate to FastAPI or any other framework.
+- Do not change runtime code outside `channels/dashboard.py` and its test/probe files.
+- Do not modify vault Topic/Evidence content, DB1 schema, or Windows Task Scheduler tasks.
+- Do not claim issues fixed in KNOWN_ISSUES.md; mark as `mitigated@020-1` only after verified evidence.
 
-- `vault/semantic/topic/ai-agent-open-source-tools.md` (new)
-- `vault/semantic/topic/claude-code-cost-optimization.md` (new)
-- `vault/semantic/topic/fable-5-system-prompt-analysis.md` (new)
-- `vault/semantic/topic/karpathy-claude-md-workflow.md` (new)
-- `vault/semantic/topic/obsidian-as-ai-knowledge-base.md` (new)
-- 21 篇既有 evidence notes 的 frontmatter 更新
+## Verification Plan
 
-## Done gate
+- Unit: `python -m pytest tests/test_dashboard.py -q`
+- Regression: `python -m pytest tests/ -q`
+- Operational QA: `python scripts/probes/probe_dashboard_post_bounds.py` against `http://127.0.0.1:7777` and verify HTTP 400 for invalid/missing/zero/negative/oversize Content-Length
 
-5 篇 topic notes 建立，內容為精煉後知識；21 篇 evidence 標記 `consolidated_into` 正確；用戶確認 topic notes 品質可接受。
+## Done Gate
+
+- W1/W2/M2 mitigations are implemented and tests pass
+- Full regression `python -m pytest tests/ -q` exits 0
+- Operational probe reports correct rejection behavior
+- KNOWN_ISSUES.md updated with `mitigated@020-1` evidence (not `fixed` unless deployment-verified)

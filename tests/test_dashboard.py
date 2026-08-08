@@ -309,3 +309,26 @@ def test_done_uses_structured_outcome(db, vault):
     ))
     assert data['ok'] is True
     assert data['outcome'] == 'done'
+
+
+
+def test_post_confirm_custom_vault_uses_paired_index(db, tmp_path, monkeypatch):
+    """W2: custom-vault confirmation must not write production index.db."""
+    from core import ltm
+    custom_vault = tmp_path / "custom-vault"
+    ltm.init_vault(custom_vault)
+    production_index = tmp_path / "production-index.db"
+    monkeypatch.setattr(D.config, "INDEX_DB", production_index)
+    proposal = {
+        "agent": "orchestrator", "proposal_type": "note_write", "target": "new",
+        "payload": {"action": "create", "title": "隔離測試", "body": "custom vault", "tags": ["misc"]},
+        "confidence": 1.0, "evidence": ["隔離測試"],
+    }
+    pending_id = stm.pending_add(db, proposal, "新增隔離測試")
+    data = _json(*D.route(
+        "POST", "/api/confirm", {}, db=db, vault=custom_vault,
+        body={"pending_id": pending_id, "approve": True},
+    ))
+    assert data["ok"] is True
+    assert (custom_vault.parent / "index.db").exists()
+    assert not production_index.exists()

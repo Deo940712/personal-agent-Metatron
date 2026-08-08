@@ -11,6 +11,7 @@ Exit 1 if any unexpected result is observed.
 from __future__ import annotations
 
 import http.client
+import socket
 import json
 import sys
 
@@ -20,24 +21,37 @@ TIMEOUT = 3.0  # seconds — must not hang
 
 
 def _post(path: str, body_bytes: bytes | None, extra_headers: dict | None = None) -> tuple[int, dict | None]:
-    conn = http.client.HTTPConnection(HOST, PORT, timeout=TIMEOUT)
-    headers = {"Content-Type": "application/json"}
+    """Send a request with exact raw headers, including malformed lengths."""
+    headers = {"Host": f"{HOST}:{PORT}", "Content-Type": "application/json"}
     if extra_headers:
         headers.update(extra_headers)
-    if body_bytes is not None:
+    if body_bytes is not None and "Content-Length" not in headers:
         headers["Content-Length"] = str(len(body_bytes))
+    request = [f"POST {path} HTTP/1.1"]
+    request.extend(f"{key}: {value}" for key, value in headers.items())
+    request_bytes = ("\r\n".join(request) + "\r\n\r\n").encode("ascii")
+    if body_bytes is not None:
+        request_bytes += body_bytes
     try:
-        conn.request("POST", path, body=body_bytes, headers=headers)
-        resp = conn.getresponse()
-        raw = resp.read().decode("utf-8")
-        data = json.loads(raw) if raw else None
-        return resp.status, data
+        with socket.create_connection((HOST, PORT), timeout=TIMEOUT) as sock:
+            sock.sendall(request_bytes)
+            chunks: list[bytes] = []
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                if b"\r\n\r\n" in b"".join(chunks) and len(b"".join(chunks)) > 65536:
+                    break
+        raw = b"".join(chunks)
+        header, _, payload = raw.partition(b"\r\n\r\n")
+        status = int(header.splitlines()[0].split()[1])
+        data = json.loads(payload.decode("utf-8")) if payload else None
+        return status, data
     except (ConnectionRefusedError, OSError) as e:
         print(f"ERROR: cannot reach dashboard at http://{HOST}:{PORT} — {e}")
         print("Make sure the dashboard is running before executing this probe.")
         sys.exit(2)
-    finally:
-        conn.close()
 
 
 def main() -> int:
@@ -54,7 +68,7 @@ def main() -> int:
 
     # ── W1: missing Content-Length ─────────────────────────────────────
     status, data = _post("/api/confirm",
-                         b'{"pending_id":1,"approve":true}',
+                         None,
                          extra_headers={})
     if status == 400:
         print(f"PASS  missing Content-Length: {status} (rejected)")

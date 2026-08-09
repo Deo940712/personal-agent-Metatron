@@ -204,11 +204,38 @@ CREATE TABLE IF NOT EXISTS watchlist (
 );
 CREATE INDEX IF NOT EXISTS idx_watchlist_active
   ON watchlist(state, last_checked_at);
+
+-- 排程 job 執行權威(part-020-slice-004: observability baseline)
+CREATE TABLE IF NOT EXISTS job_runs (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_name            TEXT    NOT NULL,
+  run_id              TEXT    NOT NULL UNIQUE,
+  planned_at          INTEGER NOT NULL,
+  started_at          INTEGER NOT NULL,
+  finished_at         INTEGER,
+  status              TEXT    NOT NULL DEFAULT 'running'
+                      CHECK (status IN ('running','succeeded','failed','skipped','missed')),
+  exit_code           INTEGER,
+  error               TEXT,
+  duration_seconds    INTEGER,
+  log_path            TEXT,
+  last_success_at     INTEGER,
+  next_expected_at    INTEGER,
+  created_at          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_job_runs_job_status_time
+  ON job_runs(job_name, status, planned_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_job_runs_one_running
+  ON job_runs(job_name)
+  WHERE status = 'running';
 """
 
 TABLES = ("schedule", "tasks", "projects", "cursors", "agent_runs", "events",
           "pending_proposals", "directives", "profile_facets", "advices",
           "watchlist")
+
+_JOB_RUN_STATUSES = ("running", "succeeded", "failed", "skipped", "missed")
+_JOB_RUN_FINISH_STATUSES = ("succeeded", "failed", "skipped", "missed")
 
 
 def connect(db_path: Path | None = None, *, require_exists: bool = True) -> sqlite3.Connection:
@@ -238,9 +265,10 @@ def init(db_path: Path | None = None) -> Path:
 def existing_tables(db_path: Path | None = None) -> list[str]:
     con = connect(db_path)
     try:
+        names = ",".join("?" * len(TABLES))
         rows = con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        ).fetchall()
+            f"SELECT name FROM sqlite_master WHERE type='table' AND name IN ({names}) ORDER BY name",
+            TABLES).fetchall()
         return [r[0] for r in rows]
     finally:
         con.close()
@@ -276,6 +304,19 @@ def fmt_when(epoch: int | None) -> str:
 def _row_dicts(cur: sqlite3.Cursor) -> list[dict]:
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _require_non_empty_text(value: str, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} must be a non-empty string")
+    return value.strip()
+
+
+def _require_job_run_status(status: str, *, finishing: bool = False) -> str:
+    allowed = _JOB_RUN_FINISH_STATUSES if finishing else _JOB_RUN_STATUSES
+    if status not in allowed:
+        raise ValueError(f"invalid job run status: {status!r}")
+    return status
 
 
 # ── schedule CRUD ────────────────────────────────────────────────────
@@ -1065,6 +1106,117 @@ def watchlist_touch_checked(db: Path | None, watch_id: int,
                           (now_ts if now_ts is not None else now(), watch_id))
         con.commit()
         return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+# ── job_runs observability(part-020-slice-004)──────────────────────────
+
+def job_run_start(db: Path | None, job_name: str, run_id: str, planned_at: int,
+                  next_expected_at: int | None, now: int | None = None) -> int | None:
+    """Create one running job row, returning None when that job is already active."""
+    name = _require_non_empty_text(job_name, "job_name")
+    correlation_id = _require_non_empty_text(run_id, "run_id")
+    started_at = now if now is not None else globals()["now"]()
+    con = connect(db)
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        active = con.execute(
+            "SELECT id FROM job_runs WHERE job_name = ? AND status = 'running' LIMIT 1",
+            (name,)).fetchone()
+        if active is not None:
+            con.execute("COMMIT")
+            return None
+        cur = con.execute(
+            "INSERT INTO job_runs (job_name, run_id, planned_at, started_at, status, "
+            "next_expected_at, created_at) VALUES (?, ?, ?, ?, 'running', ?, ?)",
+            (name, correlation_id, planned_at, started_at, next_expected_at, started_at))
+        con.execute("COMMIT")
+        return cur.lastrowid
+    except sqlite3.Error:
+        con.execute("ROLLBACK")
+        raise
+    finally:
+        con.close()
+
+
+def job_run_finish(db: Path | None, run_id: str, status: str, exit_code: int | None = None,
+                   error: str | None = None, finished_at: int | None = None,
+                   log_path: str | None = None) -> bool:
+    """Finish a running job row by run_id and compute duration from stored start time."""
+    correlation_id = _require_non_empty_text(run_id, "run_id")
+    final_status = _require_job_run_status(status, finishing=True)
+    completed_at = finished_at if finished_at is not None else now()
+    con = connect(db)
+    try:
+        row = con.execute(
+            "SELECT started_at FROM job_runs WHERE run_id = ? AND status = 'running'",
+            (correlation_id,)).fetchone()
+        if row is None:
+            return False
+        last_success_at = completed_at if final_status == "succeeded" else None
+        cur = con.execute(
+            "UPDATE job_runs SET finished_at = ?, status = ?, exit_code = ?, error = ?, "
+            "duration_seconds = ?, log_path = ?, last_success_at = ? "
+            "WHERE run_id = ? AND status = 'running'",
+            (completed_at, final_status, exit_code, error, completed_at - row[0], log_path,
+             last_success_at, correlation_id))
+        con.commit()
+        return cur.rowcount == 1
+    finally:
+        con.close()
+
+
+def job_run_list(db: Path | None, job_name: str | None = None, limit: int = 50) -> list[dict]:
+    """List job_runs newest first, optionally scoped to one job_name."""
+    con = connect(db)
+    try:
+        if job_name is not None:
+            name = _require_non_empty_text(job_name, "job_name")
+            cur = con.execute(
+                "SELECT * FROM job_runs WHERE job_name = ? ORDER BY planned_at DESC, id DESC LIMIT ?",
+                (name, limit))
+        else:
+            cur = con.execute(
+                "SELECT * FROM job_runs ORDER BY planned_at DESC, id DESC LIMIT ?",
+                (limit,))
+        return _row_dicts(cur)
+    finally:
+        con.close()
+
+
+def job_run_active(db: Path | None, job_name: str) -> dict | None:
+    """Return the active running row for one job, if present."""
+    name = _require_non_empty_text(job_name, "job_name")
+    con = connect(db)
+    try:
+        rows = _row_dicts(con.execute(
+            "SELECT * FROM job_runs WHERE job_name = ? AND status = 'running' LIMIT 1",
+            (name,)))
+        return rows[0] if rows else None
+    finally:
+        con.close()
+
+
+def job_run_schema_columns(db: Path | None) -> list[str]:
+    """Return job_runs column names for schema probes."""
+    con = connect(db)
+    try:
+        rows = con.execute("PRAGMA table_info(job_runs)").fetchall()
+        return [row[1] for row in rows]
+    finally:
+        con.close()
+
+
+def job_run_running_count(db: Path | None, job_name: str) -> int:
+    """Return the number of running rows for one job, used by probes."""
+    name = _require_non_empty_text(job_name, "job_name")
+    con = connect(db)
+    try:
+        row = con.execute(
+            "SELECT COUNT(*) FROM job_runs WHERE job_name = ? AND status = 'running'",
+            (name,)).fetchone()
+        return row[0]
     finally:
         con.close()
 

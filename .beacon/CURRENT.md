@@ -1,44 +1,48 @@
 ﻿# CURRENT
 
 Part: part-020
-Slice: slice-003
-Status: active — promoted 2026-08-03 after slice-002 verification and audit
+Slice: slice-004
+Status: active — promoted 2026-08-03 after slice-003 verification and audit
 Design authority: `.beacon/parts/part-020/DESIGN.md`
-TODO source: `.beacon/parts/part-020/TODO.md#slice-003`
+TODO source: `.beacon/parts/part-020/TODO.md#slice-004`
 
 ## Goal
 
-Establish non-destructive backup, restore, and doctor procedures using disposable paths, with measurable RPO/RTO evidence and no production data mutation.
+Create the authoritative DB1 `job_runs` schema and APIs needed to observe scheduled jobs before part-021 daemon work begins.
 
 ## Allowed Scope
 
-- [ ] Add `scripts/backup.py` (new) for explicit source/output paths.
-- [ ] Add `scripts/restore.py` (new) for explicit backup/target paths.
-- [ ] Add `scripts/doctor.py` (new) to inspect DB integrity and required tables.
-- [ ] Add `docs/OPERATIONS.md` (new) documenting the drill, RPO/RTO, and production-path guardrails.
+- [ ] Add the `job_runs` table through the existing DB1 initialization/migration path.
+- [ ] Add typed `core/stm.py` APIs for starting, completing, failing, skipping, and querying job runs.
+- [ ] Add `tests/test_job_runs.py` (new) covering schema, status transitions, overlap/idempotency, and last-success/next-expected fields.
+- [ ] Add `scripts/probes/probe_job_runs_schema.py` (new) producing deterministic JSON evidence.
+- [ ] Add `docs/SCHEMA.md` and `docs/OBSERVABILITY.md` (new) for the contract.
 
 ## Files-scope
 
-- `scripts/backup.py` (new)
-- `scripts/restore.py` (new)
-- `scripts/doctor.py` (new)
-- `docs/OPERATIONS.md` (new)
+- `core/stm.py`
+- `tests/test_job_runs.py` (new)
+- `scripts/probes/probe_job_runs_schema.py` (new)
+- `docs/SCHEMA.md`
+- `docs/OBSERVABILITY.md` (new)
 
 ## Forbidden Scope
 
-- Do not modify runtime application modules or DB schema.
-- Do not read, overwrite, corrupt, or restore production DB1, vault, transcript, or index paths.
-- Do not modify Windows Task Scheduler or daemon plans.
-- Do not alter `.beacon/CURRENT.md` outside this active slice status and evidence.
+- Do not implement the resident daemon, watchdog, dashboard job UI, or scheduler migration.
+- Do not modify vault, transcript, vector index, or Windows Task Scheduler.
+- Do not alter `.beacon/CURRENT.md` outside this active slice status and verification evidence.
+- Do not modify unrelated dirty files.
 
 ## Verification Plan
 
-- Unit/regression: `python -m pytest tests/ -q`.
-- Operational QA: create `.tmp/part-020-slice-003/` disposable fixture; run backup with explicit source/output, corrupt only disposable source, restore to disposable target, run doctor, and measure elapsed backup/restore seconds as RTO evidence.
-- Safety QA: assert production `config.STATE_DB`, `config.VAULT_PATH`, `config.INDEX_DB`, and `config.TRANSCRIPT_DIR` are rejected as source/target paths; clean the disposable fixture afterward.
+- Red: add `tests/test_job_runs.py` first and prove the required table/API is absent or incomplete on the pre-change schema.
+- Unit: `python -m pytest tests/test_job_runs.py -q`.
+- Regression: `python -m pytest tests/ -q`.
+- Operational QA: `python scripts/probes/probe_job_runs_schema.py --db "$env:TEMP\metatron-job-runs.db" --report "$env:TEMP\metatron-job-runs-report.json"`; assert schema, transitions, overlap handling, and deterministic report fields.
 
 ## Done Gate
 
-- Backup, restore, and doctor commands pass on disposable fixtures.
-- RPO/RTO measurements and production-path rejection are documented in verification evidence.
-- Full regression passes; no production path was touched.
+- DB1 initialization/migration creates `job_runs` without breaking existing databases.
+- APIs enforce allowed status transitions and prevent duplicate active runs for the same job.
+- Focused/full tests and the schema probe pass.
+- part-021 can consume the documented `job_runs` authority without adding a second status store.

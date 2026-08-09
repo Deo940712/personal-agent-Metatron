@@ -1,103 +1,103 @@
-# KNOWN ISSUES — 反查稽核報告
+﻿# KNOWN ISSUES ???蝔賣?勗?
 
-> 建立:2026-07-13(part-002-slice-002 完成後、slice-003 開工前的反查)
-> 方法:通讀五個模組 + **探針腳本實證**(每個問題都有實際重現,不是猜測)。
-> 狀態欄:`open` = 未修;`fix@NNN` = 排定在該 slice 修;`accepted` = 已知並接受。
+> 撱箇?:2026-07-13(part-002-slice-002 摰?敺lice-003 ?極???)
+> ?寞?:??鈭芋蝯?+ **?ａ??單撖西?**(瘥?憿?祕????銝?葫)??
+> ???:`open` = ?芯耨;`fix@NNN` = ???刻府 slice 靽?`accepted` = 撌脩銝行??
 
-## 嚴重度 HIGH(會 crash 或資料毒化,slice-003 開工前必修)
+## ?湧?摨?HIGH(??crash ??????slice-003 ?極??靽?
 
-### K1 `fixed@018-3` malformed YAML migration 覆寫原 metadata
+### K1 `fixed@018-3` malformed YAML migration 閬神??metadata
 
-- **重現**：frontmatter 含 PyYAML 無法解析的純量時，`load_frontmatter()` 捕捉
-  `yaml.YAMLError` 後回傳 `{}`；後續 migration 加入 KB 2.0 欄位並 save，原 metadata
-  被覆寫成只剩 `note_type`／`evidence_status`。
-- **實證範圍**：807 篇 current/backup 全量比對後，正文 807 篇均未變；804 篇 metadata
-  完整；受損精確為 `20260530-metaai-點評這部的親情感人嗎.md`、
-  `20260604-metaai.md`、`20260713-evm-新手開發路線.md`，三者 backup 完整。
-- **修法**：parse failure fail-closed 並回報檔名；紅測試先行；只從 backup 精準恢復
-  3 篇，不 broad rollback 其餘 804 篇；rollback 同時移除本次 migration 新建 Topic files。
-- **驗證**：migration suite 10 passed；807/807 current/backup 比對無正文差異，804 篇
-  metadata 無遺失，3 篇受損筆記已精準恢復並保留 KB 2.0 欄位。
+- **?**嚗rontmatter ??PyYAML ?⊥?閫??????嚗load_frontmatter()` ??
+  `yaml.YAMLError` 敺???`{}`嚗?蝥?migration ? KB 2.0 甈?銝?save嚗? metadata
+  鋡怨?撖急??芸 `note_type`嚗evidence_status`??
+- **撖西?蝭?**嚗?07 蝭?current/backup ?券?瘥?敺?甇?? 807 蝭??芾?嚗?04 蝭?metadata
+  摰嚗??移蝣箇 `20260530-metaai-暺???扛??鈭箏?.md`??
+  `20260604-metaai.md`?20260713-evm-?唳??頝舐?.md`嚗???backup 摰??
+- **靽格?**嚗arse failure fail-closed 銝血??望???蝝葫閰血?銵??芸? backup 蝎暹??Ｗ儔
+  3 蝭?銝?broad rollback ?園? 804 蝭?rollback ??蝘駁?祆活 migration ?啣遣 Topic files??
+- **撽?**嚗igration suite 10 passed嚗?07/807 current/backup 瘥??⊥迤?榆?堆?804 蝭?
+  metadata ?⊿憭梧?3 蝭???閮歇蝎暹??Ｗ儔銝虫???KB 2.0 甈???
 
-### K2 `fixed@018-3` 暫存 vault 的蒸餾測試污染正式衍生索引
+### K2 `fixed@018-3` ?怠? vault ?擗暹葫閰行情?迤撘??揣撘?
 
-- **重現**：`consolidate.run(vault=tmp_path/"vault", ...)` 會建立測試筆記，但
-  `_distill_batch()` 固定呼叫 `vindex.upsert(config.INDEX_DB, ...)`；完整測試後正式
-  `index.db` 留下 `d1`／`d2`／`day-1`／語言偏好等 10 個 fixture IDs。
-- **影響**：權威 vault 未受損，但 Topic-first 的正式衍生索引由 5 筆變成 15 筆，
-  一般檢索可能回傳不存在於正式 vault 的測試資料。
-- **修法**：`consolidate.run()` 接受可注入 `idx_db` 並傳入 `_distill_batch()`；
-  `consolidate.run()`／`curate.run()` 在自訂 vault 且省略 idx_db 時，配對使用
-  `vault.parent/index.db`；production 同時省略 vault/index 時仍使用 `config.INDEX_DB`。
-- **回歸**：`test_run_uses_injected_index_without_touching_production` 驗證暫存 index
-  可檢索新筆記，production sentinel 不建立；Scout→Curate E2E 亦驗證相同契約；
-  consolidate/routine 45 tests 與 curate/scout/recall 57 tests 通過。
+- **?**嚗consolidate.run(vault=tmp_path/"vault", ...)` ?遣蝡葫閰衣?閮?雿?
+  `_distill_batch()` ?箏??澆 `vindex.upsert(config.INDEX_DB, ...)`嚗??湔葫閰血?甇??
+  `index.db` ?? `d1`嚗d2`嚗day-1`嚗?閮?末蝑?10 ??fixture IDs??
+- **敶梢**嚗?憡?vault ?芸???雿?Topic-first ?迤撘??揣撘 5 蝑???15 蝑?
+  銝?祆炎蝝Ｗ?賢??喃?摮?潭迤撘?vault ?葫閰西???
+- **靽格?**嚗consolidate.run()` ?亙??舀釣??`idx_db` 銝血??`_distill_batch()`嚗?
+  `consolidate.run()`嚗curate.run()` ?刻閮?vault 銝???idx_db ????雿輻
+  `vault.parent/index.db`嚗roduction ??? vault/index ??雿輻 `config.INDEX_DB`??
+- **?飛**嚗test_run_uses_injected_index_without_touching_production` 撽??怠? index
+  ?舀炎蝝Ｘ蝑?嚗roduction sentinel 銝遣蝡?Scout?urate E2E 鈭阡?霅??蝝?
+  consolidate/routine 45 tests ??curate/scout/recall 57 tests ????
 
-### B1 `fixed@002-3` update 空 fields → SQL 語法錯誤 crash
+### B1 `fixed@002-3` update 蝛?fields ??SQL 隤??航炊 crash
 
-- **重現**:`{"action":"update","fields":{}}` → `OperationalError: near "WHERE": syntax error`
-- **根因**:`writer._apply_change` 組 `UPDATE ... SET ` 時 fields 為空,SET 子句空字串
-- **影響**:LLM 完全可能產出空 update;writer 該拒絕卻 crash(未捕捉例外 → orchestrator 崩潰、agent_runs 卡 running)
-- **修法**:`proposals._validate_change`:update 時 `fields` 為空 → ProposalError
+- **?**:`{"action":"update","fields":{}}` ??`OperationalError: near "WHERE": syntax error`
+- **?孵?**:`writer._apply_change` 蝯?`UPDATE ... SET ` ??fields ?箇征,SET 摮蝛箏?銝?
+- **敶梢**:LLM 摰?航?Ｗ蝛?update;writer 閰脫?蝯 crash(?芣???憭???orchestrator 撏拇蔑?gent_runs ??running)
+- **靽格?**:`proposals._validate_change`:update ??`fields` ?箇征 ??ProposalError
 
-### B2 `fixed@002-3` update 可把 NOT NULL 欄位設成 None → IntegrityError crash
+### B2 `fixed@002-3` update ?舀? NOT NULL 甈?閮剜? None ??IntegrityError crash
 
-- **重現**:`{"action":"update","fields":{"title":null}}` 或 `{"start_at":null}` → `IntegrityError: NOT NULL constraint failed`
-- **根因**:validator 的 int 檢查刻意放行 None(`if fields[key] is not None`),但 title/start_at 是 NOT NULL
-- **影響**:同 B1——crash 而非優雅拒絕
-- **修法**:validator 區分 nullable(end_at/remind_at/rrule/detail/due_at 可 None=清除)與 NOT NULL(title/start_at 不可 None)
+- **?**:`{"action":"update","fields":{"title":null}}` ??`{"start_at":null}` ??`IntegrityError: NOT NULL constraint failed`
+- **?孵?**:validator ??int 瑼Ｘ?餅??曇? None(`if fields[key] is not None`),雿?title/start_at ??NOT NULL
+- **敶梢**:??B1?rash ???芷???
+- **靽格?**:validator ???nullable(end_at/remind_at/rrule/detail/due_at ??None=皜)??NOT NULL(title/start_at 銝 None)
 
-### B3 `fixed@002-3` 界外 epoch → 一筆壞資料讓所有 list 永久 crash(資料毒化)
+### B3 `fixed@002-3` ?? epoch ??銝蝑?鞈?霈???list 瘞訾? crash(鞈?瘥?)
 
-- **重現**:`start_at=99999999999999`(或負數)→ 預覽/`fmt_when` → `OSError: [Errno 22]`
-- **更嚴重**:此值一旦落庫(見 B4 路徑或直接 CRUD),**之後每次 `schedule list` 都 crash**——一筆壞資料癱瘓整個 CLI
-- **根因**:validator 只查 `isinstance(int)`,不查範圍;`fmt_when` 直接 `fromtimestamp`
-- **修法**(雙層):① validator 加 epoch 合理範圍(2000-01-01 ~ 2100-01-01:946684800‥4102444800);② `fmt_when` 防禦性 try/except 回傳 `?invalid`
+- **?**:`start_at=99999999999999`(???????汗/`fmt_when` ??`OSError: [Errno 22]`
+- **?游??*:甇文潔??西摨?閬?B4 頝臬????CRUD),**銋?瘥活 `schedule list` ??crash**??蝑?鞈??梁??游?CLI
+- **?孵?**:validator ?芣 `isinstance(int)`,銝蝭?;`fmt_when` ?湔 `fromtimestamp`
+- **靽格?**(?惜):??validator ??epoch ??蝭?(2000-01-01 ~ 2100-01-01:946684800??102444800);??`fmt_when` ?脩戌??try/except ? `?invalid`
 
-### B4 `fixed@002-3` bool 通過 int 檢查
+### B4 `fixed@002-3` bool ?? int 瑼Ｘ
 
-- **重現**:`start_at=true`(JSON boolean)→ `isinstance(True, int)` 為真 → 落庫為 1(=1970 年)
-- **影響**:LLM 產出 JSON true/false 時寫入垃圾時間,靜默無錯
-- **修法**:int 檢查改 `isinstance(v, int) and not isinstance(v, bool)`
+- **?**:`start_at=true`(JSON boolean)??`isinstance(True, int)` ?箇? ???賢澈??1(=1970 撟?
+- **敶梢**:LLM ?Ｗ JSON true/false ?神?亙??暹??????⊿
+- **靽格?**:int 瑼Ｘ??`isinstance(v, int) and not isinstance(v, bool)`
 
-## 嚴重度 MEDIUM(不 crash 但行為錯誤或有風險)
+## ?湧?摨?MEDIUM(銝?crash 雿??粹隤斗??◢??
 
-### B5 `fixed@002-3` CLI `parse_when` 壞輸入 → 裸 traceback
+### B5 `fixed@002-3` CLI `parse_when` 憯撓????鋆?traceback
 
-- **重現**:`python -m core.stm schedule add x --start not-a-date` → `ValueError: Invalid isoformat string` 全 traceback
-- **修法**:CLI 層 try/except → 友善訊息 + exit 2
+- **?**:`python -m core.stm schedule add x --start not-a-date` ??`ValueError: Invalid isoformat string` ??traceback
+- **靽格?**:CLI 撅?try/except ????閮 + exit 2
 
-### B6 `mitigated@002-3` done/cancel 免確認 + prompt injection = 可無確認關閉任意列
+### B6 `mitigated@002-3` done/cancel ?Ⅱ隤?+ prompt injection = ?舐蝣箄???隞餅???
 
-- **重現**:confirm_fn=None(scheduler 情境)下 `{"action":"done","target":"4"}` 照樣 applied
-- **分析**:「done 免確認」是規格(§3.1 規則 7),單獨看沒錯;但組合「LLM 解析不可信輸入」時,注入文字可讓 LLM 產 done/cancel 提案關掉任意行程
-- **緩解**(slice-003 實作):orchestrator 只接受 done/cancel 的 target ∈ 本次注入的 active_items id 清單;不在清單 → 降級為需確認
-- **殘餘風險**:接受(單人系統、行程可自行改回)
+- **?**:confirm_fn=None(scheduler ??)銝?`{"action":"done","target":"4"}` ?扳見 applied
+- **??**:?one ?Ⅱ隤閬(禮3.1 閬? 7),?桃????雿??LM 閫??銝靽∟撓?乓?,瘜典???航? LLM ??done/cancel ????隞餅?銵?
+- **蝺抵圾**(slice-003 撖虫?):orchestrator ?芣??done/cancel ??target ???祆活瘜典??active_items id 皜;銝皜 ?????粹?蝣箄?
+- **畾?憸券**:?亙?(?桐犖蝟餌絞??蝔?芾??孵?)
 
-### B7 `planned@020` `db=None` 預設指向生產 DB——測試/新程式碼忘帶 db 就寫真資料
+### B7 `mitigated@020-2` `db=None` ?身??? DB?葫閰??啁?撘Ⅳ敹葆 db 撠勗神????
 
-- **重現**:`llm.complete(...)`(不帶 db)→ `stm.event_append(None,...)` → 寫進 `config.STATE_DB`
-- **分析**:CLI 情境是 feature,內部模組是 footgun。slice-002 測試都有帶 db 所以沒炸,但未來忘一次就污染生產 events
-- **修法**:core 內部函式間傳遞 db 改為必填參數(CLI 入口才解析 None→config);至少在 llm.py/writer.py 內部呼叫鏈不允許隱式 None
+- **?**:`llm.complete(...)`(銝葆 db)??`stm.event_append(None,...)` ??撖恍?`config.STATE_DB`
+- **??**:CLI ????feature,?折璅∠???footgun?lice-002 皜祈岫?賣?撣?db ?隞交???雿靘?銝甈∪停瘙⊥?? events
+- **靽格?**:core ?折?賢????db ?寧敹‵?(CLI ?亙?圾??None?onfig);?喳???llm.py/writer.py ?折?澆???迂?勗? None
 
-### B8 `fixed@002-3` `llm.complete` 對不可重試錯誤也重試
+### B8 `fixed@002-3` `llm.complete` 撠??舫?閰阡隤支??岫
 
-- **重現**:401 無效 key / 404 模型不存在 → 仍重打第二次
-- **影響**:浪費延遲與費用;錯誤訊息延後暴露
-- **修法**:僅對 timeout/connection/5xx 重試;4xx 直接拋
+- **?**:401 ?⊥? key / 404 璅∪?銝?????隞??洵鈭活
+- **敶梢**:瘚芾祥撱園?祥???航炊閮撱嗅??湧
+- **靽格?**:?? timeout/connection/5xx ?岫;4xx ?湔??
 
-### B9 `open→fix@002-5前` `_now_line` 時區偏移用 `time.daylight`(定義旗標)而非 `tm_isdst`(當前生效)
+### B9 `open?ix@002-5? `_now_line` ???宏??`time.daylight`(摰儔??)?? `tm_isdst`(?嗅???)
 
-- **現況**:台灣無 DST,兩者皆 0,**目前正確**
-- **風險**:遷 VPS 到有 DST 的時區(歐美)→ 偏移差 1 小時 → LLM 換算「明天下午兩點」全錯 1 小時
-- **修法**:改用 `time.localtime().tm_isdst` 判斷;遷 VPS checklist(backlog-008)加一條
+- **?暹?**:?啁??DST,?抵? 0,**?桀?甇?Ⅱ**
+- **憸券**:??VPS ?唳? DST ???(甇?)???宏撌?1 撠? ??LLM ????憭拐??暺??1 撠?
+- **靽格?**:?寧 `time.localtime().tm_isdst` ?斗;??VPS checklist(backlog-008)??璇?
 
-## 嚴重度 LOW(觀測性/衛生)
+## ?湧?摨?LOW(閫皜祆?銵?)
 
-### B10 `planned@020` `connect()`/`existing_tables()` 對不存在路徑會靜默建空檔
+### B10 `fixed@020-2` `connect()`/`existing_tables()` 撠?摮頝臬???暺遣蝛箸?
 
-- sqlite 預設行為:connect 即建檔 → 打錯路徑得到 0 表空 DB 而非報錯
-- **修法**:connect 加 `require_exists=True` 參數(init 除外);或 URI `mode=rw`
+- sqlite ?身銵:connect ?喳遣瑼????頝臬?敺 0 銵函征 DB ???梢
+- **靽格?**:connect ??`require_exists=True` ?(init ?文?);??URI `mode=rw`
 
 
 ### part-020 slice-002 evidence
@@ -107,164 +107,165 @@
 - Regression: 	ests/test_db_path_safety.py plus full suite passed (973 passed, 1 warning).
 - Operational probe: scripts/probes/probe_db_b7.py rejected a disposable missing path and confirmed TARGET_EXISTS=False.
 
-### B11 `fixed@002-3` `_reject` 把 desc 塞進 events.target——target 欄位語意被污染
+### B11 `fixed@002-3` `_reject` ??desc 憛?events.target?arget 甈?隤?鋡急情??
 
-- events.target 應是「影響對象 id/路徑」,拒絕記錄卻塞了提案描述字串
-- **修法**:拒絕時 target 留 None 或帶真正的 p.target
+- events.target ??蔣?踹?鞊?id/頝臬?????閮??餃?鈭?獢?餈啣?銝?
+- **靽格?**:????target ??None ?葆?迤??p.target
 
-### B12 `info` rrule 驗證接受冗餘組合(如 `FREQ=DAILY;BYDAY=MO`)
+### B12 `info` rrule 撽??亙???蝯?(憒?`FREQ=DAILY;BYDAY=MO`)
 
-- 無害(BYDAY 被 DAILY 忽略),slice-003 前推實作時決定是否收緊
+- ?∪拿(BYDAY 鋡?DAILY 敹賜),slice-003 ?撖虫??捱摰?行蝺?
 
-## 流程教訓(記入測試策略)
+## 瘚???(閮皜祈岫蝑)
 
-1. **邊界值測試缺席**:slice-001 的 21 個 writer 測試全是「合法值 vs 非法 enum」,
-   沒測空集合、None、界外數值、bool——這正是 7 個 crash 全漏網的原因。
-   → slice-003 起,每個 validator 必配 boundary 測試(空/None/界外/型別偽裝)。
-2. **「一筆壞資料毒化所有讀取」是最危險模式**(B3):寫入驗證要比讀取顯示嚴,
-   讀取顯示要比寫入驗證韌(雙層防禦,兩層都要有)。
-3. 探針腳本已刪;重現命令都在本文件,修復時逐條轉成 regression test。
+1. **???潭葫閰衣撩撣?*:slice-001 ??21 ??writer 皜祈岫?冽??瘜?vs ?? enum??
+   瘝葫蝛粹??one??憭?潦ool?迤??7 ??crash ?冽?蝬脩?????
+   ??slice-003 韏?瘥?validator 敹? boundary 皜祈岫(蝛?None/??/??質?)??
+2. **??蝑?鞈?瘥???????梢璅∪?**(B3):撖怠撽?閬?霈?＊蝷箏,
+   霈?＊蝷箄?瘥神?仿?霅?(?惜?脩戌,?拙惜?質?????
+3. ?ａ??單撌脣;??賭誘?賢?祆?隞?靽桀儔??頧? regression test??
 
 
-## 修復記錄(2026-07-13, part-002-slice-003)
+## 靽桀儔閮?(2026-07-13, part-002-slice-003)
 
-- B1-B5, B8, B11:**fixed** — regression tests 在 tests/test_known_issues.py(逐條對應)
-- B6:**mitigated** — agent.py `_enforce_target_whitelist`:done/cancel 只接受本次
-  active 清單內的 id;越界拒絕並記 events(tests/test_agent.py::test_b6_*)
-- B7:**partial** — llm/writer 呼叫鏈已全程顯式傳 db;完全移除 None 預設留待
-  part-003(改動面大,屆時 ltm.py 一起規範)
-- B9(DST):**open** — 已在 backlog-008 VPS 遷移 checklist;B10/B12:**open**(LOW)
+- B1-B5, B8, B11:**fixed** ??regression tests ??tests/test_known_issues.py(??撠?)
+- B6:**mitigated** ??agent.py `_enforce_target_whitelist`:done/cancel ?芣?甈?
+  active 皜?抒? id;頞???銝西? events(tests/test_agent.py::test_b6_*)
+- B7:**partial** ??llm/writer ?澆?歇?函?憿臬???db;摰蝘駁 None ?身??
+  part-003(?孵??Ｗ之,撅? ltm.py 銝韏瑁?蝭?
+- B9(DST):**open** ??撌脣 backlog-008 VPS ?瑞宏 checklist;B10/B12:**open**(LOW)
 
-## Audit gate 記錄(2026-07-13, part-003-slice-002)
+## Audit gate 閮?(2026-07-13, part-003-slice-002)
 
-探針 8 項,實證 3 個 crash/缺陷,全部已修 + regression tests:
+?ａ? 8 ??撖西? 3 ??crash/蝻粹,?券撌脖耨 + regression tests:
 
-- **S5 `fixed@003-2`** LLM 回 groups 非 list → AttributeError crash → 整批視為無效回應留 trash
-- **S6 `fixed@003-2`** group 為字串混入 → AttributeError crash → _validate_group 第 0 條(必須是 object)
-- **S8 `fixed@003-2`** write_note 打錯 subdir 靜默建野目錄 → ALLOWED_SUBDIRS 白名單
-- probed clean: S1(YAML 特殊字元 roundtrip)、S2(summary 換行已在 write_note 清洗)、
-  S3(body 含 --- 不切壞)、S4(同 event 被兩組引用 = 合法,archived 冪等)、
-  S7(injection 面已知:listing 拼進 prompt 無跳脫,防線 = 欄位級驗證,注入只能影響內容不能繞驗證)
+- **S5 `fixed@003-2`** LLM ??groups ??list ??AttributeError crash ???湔閬?⊥?????trash
+- **S6 `fixed@003-2`** group ?箏?銝脫毽????AttributeError crash ??_validate_group 蝚?0 璇?敹???object)
+- **S8 `fixed@003-2`** write_note ? subdir ??撱粹??桅? ??ALLOWED_SUBDIRS ?賢???
+- probed clean: S1(YAML ?寞?摮? roundtrip)?2(summary ??撌脣 write_note 皜?)??
+  S3(body ??--- 銝?憯??4(??event 鋡怠蝯???= ??,archived ?芰?)??
+  S7(injection ?Ｗ歇??listing ?潮?prompt ?∟歲???脩? = 甈?蝝?霅?瘜典?芾敶梢?批捆銝蝜?霅?
 
-## Audit gate 記錄(2026-07-13, part-002.5-slice-001)
+## Audit gate 閮?(2026-07-13, part-002.5-slice-001)
 
-探針 5 項,發現 1 個 DESIGN 缺陷(照 continuous-loop:改 DESIGN 再進下一 slice):
+?ａ? 5 ???潛 1 ??DESIGN 蝻粹(??continuous-loop:??DESIGN ?脖?銝 slice):
 
-- **A2'/A3' `design-fix@002.5-1`** 非同步確認第二階段(pending dict → 落地)缺重驗:
-  precheck 到按鈕相隔數分鐘,target 可能被刪/改;且 pending.proposal 是 dict 而
-  apply_validated 吃 Proposal 物件(型別不符會炸)。
-  → 新增 `writer.confirm_and_apply(dict)`:接 dict、**重跑 precheck**、通過才落地。
-  DESIGN.md 追加 slice-001 稽核發現表;3 個 regression tests。
-- probed clean: A1(precheck 後 status 改仍可 update——合法)、A4(apply 非法 → rejected)、
-  A5(同提案多 pending 無去重——chat 層保證一訊息一 pending,單人低頻可接受)
+- **A2'/A3' `design-fix@002.5-1`** ??甇亦Ⅱ隤洵鈭?畾?pending dict ???賢)蝻粹?撽?
+  precheck ?唳?????,target ?航鋡怠/??銝?pending.proposal ??dict ??
+  apply_validated ??Proposal ?拐辣(?銝泵?)??
+  ???啣? `writer.confirm_and_apply(dict)`:??dict??*?? precheck**????啜?
+  DESIGN.md 餈賢? slice-001 蝔賣?潛銵?3 ??regression tests??
+- probed clean: A1(precheck 敺?status ?嫣???update??瘜??4(apply ?? ??rejected)??
+  A5(??獢? pending ?∪?hat 撅支?霅?閮銝 pending,?桐犖雿?舀??
 
-## Audit gate 記錄(2026-07-13, part-002.5-slice-002)
+## Audit gate 閮?(2026-07-13, part-002.5-slice-002)
 
-實作中即抓到:`todo`/`done` 無參數(尾隨空白被 strip)會落 LLM → 分派層接住。
-探針 7 項,發現 1 個:
+撖虫?銝剖?:`todo`/`done` ?∪???撠暸蝛箇鋡?strip)? LLM ???晷撅斗雿?
+?ａ? 7 ???潛 1 ??
 
-- **C7 `fixed@002.5-2`** 純空白訊息 → 落 LLM 白打 API → 分派層加空訊息守衛
-- probed clean: C1(大小寫前綴一致)、C2(前綴當內容不誤判)、C3(負數 pending id 回失效)、
-  C4(done 已落地行程 OK)、C5(「找時間開會」不被知識查詢誤攔)、C6(channel_ref 持久化)
+- **C7 `fixed@002.5-2`** 蝝征?質???????LLM ?賣? API ???晷撅文?蝛箄??臬?銵?
+- probed clean: C1(憭批?撖怠?蝬港????2(?韌?嗅摰嫣?隤文)?3(鞎 pending id ?仃????
+  C4(done 撌脰?啗?蝔?OK)?5(???????鋡怎霅閰Ｚ炊???6(channel_ref ????
 - regression: test_c7/c1/c6 in test_chat.py
 
-## Audit gate 記錄(2026-07-13, part-002.5-slice-003)
+## Audit gate 閮?(2026-07-13, part-002.5-slice-003)
 
-探針 6 項,發現 1 個一致性瑕疵(LOW):
+?ａ? 6 ???潛 1 ???湔抒???LOW):
 
-- **D2 `fixed@002.5-3`** encode_custom_id(-5) 產出可解碼失敗的字串 → 編解碼不對稱。
-  pending_id 是 AUTOINCREMENT 永遠正,顯式化:encode 拒絕 <1 的 id。
-- probed clean: D1(超大 id 解析/冒號注入擋下/空字串)、D3(白名單去重)、
-  D4(負數/16進位垃圾濾除)、D5(user 白名單邏輯)、**D6(模組載入不 eager import
-  discord.py——薄 adapter 解耦成立)**
+- **D2 `fixed@002.5-3`** encode_custom_id(-5) ?Ｗ?航圾蝣澆仃??摮葡 ??蝺刻圾蝣潔?撠迂??
+  pending_id ??AUTOINCREMENT 瘞賊?甇?憿臬???encode ?? <1 ??id??
+- probed clean: D1(頞之 id 閫??/??瘜典??/蝛箏?銝??3(?賢??桀????
+  D4(鞎/16?脖??瞈暸)?5(user ?賢??桅?頛???*D6(璅∠?頛銝?eager import
+  discord.py?? adapter 閫?行?蝡?**
 
-## Audit gate 記錄(2026-07-13, part-004-slice-002 curator)
+## Audit gate 閮?(2026-07-13, part-004-slice-002 curator)
 
-手動 QA 端到端即稽核,抓到 1 個真缺陷當場修:
+?? QA 蝡臬蝡臬蝔賣,? 1 ??蝻粹?嗅靽?
 
-- **E1 `fixed@004-2`** dedupe 正本選擇依 path 字母序——誰是正本變成檔名運氣
-  (rag_dup 排在 rag_tip 前就反了)→ 改依 frontmatter date(發布時間早者為正本);
-  無 date 排最後。手動 QA 腳本驗證:正本入庫可檢索、轉發標 duplicate。
-- 測試覆蓋依 KNOWN_ISSUES boundary 慣例:score 界外/bool 偽裝/詞彙表外 tag/
-  空 tags/161 字 summary/evidence 不屬實/幻覺 path/LLM 失敗留 inbox/配額 defer,
-  全部 19 tests 綠。
+- **E1 `fixed@004-2`** dedupe 甇??豢?靘?path 摮?摨狐?舀迤?祈?????瘞?
+  (rag_dup ? rag_tip ?停??)???嫣? frontmatter date(?澆????抵甇?);
+  ??date ??敺???QA ?單撽?:甇??亙澈?舀炎蝝Ｕ??潭? duplicate??
+- 皜祈岫閬?靘?KNOWN_ISSUES boundary ???:score ??/bool ?質?/閰?銵典? tag/
+  蝛?tags/161 摮?summary/evidence 銝惇撖?撟餉死 path/LLM 憭望???inbox/?? defer,
+  ?券 19 tests 蝬?
 
-## Audit gate 記錄(2026-07-13, part-004-slice-003 recall)
+## Audit gate 閮?(2026-07-13, part-004-slice-003 recall)
 
-探針 7 項,發現 1 個(當場修 + regression):
+?ａ? 7 ???潛 1 ???嗅靽?+ regression):
 
-- **R2 `fixed@004-3`** answer 的 citations 為字串(非 list)→ 曾靜默轉空放行
-  =「有主張無引用」繞過硬規則 → 改拒答(格式錯誤,原回答丟棄)
-- probed clean: R1(非 dict move → LLMError 誠實回)、R3(超長 answer 截 500)、
-  R4(超長 query 截 200)、R5(絕對路徑擋)、R7(int citation → 驗證失敗拒答)、
-  R6(筆記 body 注入面已知:防線 = 引用驗證獨立於文字,假 id 必被抓)
+- **R2 `fixed@004-3`** answer ??citations ?箏?銝???list)???暸?暺?蝛箸銵?
+  =??銝餃撐?∪??具??′閬? ???寞?蝑??澆??航炊,??蝑?璉?
+- probed clean: R1(??dict move ??LLMError 隤祕???3(頞 answer ??500)??
+  R4(頞 query ??200)?5(蝯?頝臬????7(int citation ??撽?憭望???)??
+  R6(蝑? body 瘜典?Ｗ歇???脩? = 撘撽??函??潭?摮???id 敹◤??
 
-## Audit gate 記錄(2026-07-13, part-004.5-slice-002 supersede)
+## Audit gate 閮?(2026-07-13, part-004.5-slice-002 supersede)
 
-探針 4 項,發現 1 個真漏洞(當場修 + regression):
+?ａ? 4 ???潛 1 ??瞍?(?嗅靽?+ regression):
 
-- **U2 `fixed@004.5-2`** episodic kind 帶 supersedes 繞過驗證直接執行
-  mark_superseded(驗證只掛在 preference 分支,執行卻無條件跑——驗證與執行
-  不對稱)→ _validate_supersedes 對所有 kind 執行,episodic 帶 supersedes
-  整組拒絕。
-- probed clean: U1(自指/清單外 id 拒絕)、U3(int/bool 型別拒絕)、
-  U4(registry 有 id 但檔案被手刪 → False 不 crash)
+- **U2 `fixed@004.5-2`** episodic kind 撣?supersedes 蝜?撽??湔?瑁?
+  mark_superseded(撽??芣???preference ?,?瑁??餌璇辣頝?霅??瑁?
+  銝?蝔???_validate_supersedes 撠???kind ?瑁?,episodic 撣?supersedes
+  ?渡?????
+- probed clean: U1(?芣?/皜憭?id ??)?3(int/bool ???)??
+  U4(registry ??id 雿?獢◤? ??False 銝?crash)
 
-## Audit gate 記錄(2026-07-13, part-004.5-slice-003 RRF)
+## Audit gate 閮?(2026-07-13, part-004.5-slice-003 RRF)
 
-探針 5 項全 clean:
+?ａ? 5 ? clean:
 
-- V1/V2:stage 值('fts'/'vec'→'rrf')只有 recall 工具輸出資訊性引用,無邏輯分支
-- V3:單 token 查詢走強命中短路(score=token數),融合路徑正確分離
-- V4:中文連續段=1 token 的語意確認('向量索引'是 1 token,強命中需 ≥2 段)
-- V5:_strong_index_hits 全掃後排序,無 early-break 漏筆記
+- V1/V2:stage ??'fts'/'vec'??rrf')?芣? recall 撌亙頛詨鞈??批????⊿?頛臬???
+- V3:??token ?亥岷韏啣撥?賭葉?剛楝(score=token??,??頝臬?甇?Ⅱ?
+- V4:銝剜????畾?1 token ???Ⅱ隤?'??蝝Ｗ?'??1 token,撘瑕銝剝? ?? 畾?
+- V5:_strong_index_hits ?冽?敺?摨???early-break 瞍?閮?
 
-## Audit gate 記錄(2026-07-15, part-006-slice-000 capability tools)
+## Audit gate 閮?(2026-07-15, part-006-slice-000 capability tools)
 
-Hands-on QA 實證 1 個使用者可見歧義，當場修正並加入 regression:
+Hands-on QA 撖西? 1 ?蝙?刻閬郁蝢抬??嗅靽格迤銝血???regression:
 
-- **T1 `fixed@006-0`** `schedule` 與 `tasks` 各自 AUTOINCREMENT，常同時有 `#1`；
-  原 `done 1` task-first fallback 會永遠先完成 task，無法指定同編號 schedule。
-  → 未指定 kind 且兩表都存在時 fail-closed，要求 `done task 1` 或
-  `done schedule 1`；編號只存在一表時保留既有 `done 1` 相容行為。
+- **T1 `fixed@006-0`** `schedule` ??`tasks` ? AUTOINCREMENT嚗虜????`#1`嚗?
+  ??`done 1` task-first fallback ?偶??摰? task嚗瘜?摰?蝺刻? schedule??
+  ???芣?摰?kind 銝銵券摮??fail-closed嚗?瘙?`done task 1` ??
+  `done schedule 1`嚗楊?摮銝銵冽?靽??Ｘ? `done 1` ?詨捆銵??
 - regression:`tests/test_tools.py::test_complete_rejects_ambiguous_unqualified_id_and_accepts_explicit_kind`
-  與 `tests/test_chat.py::test_done_collision_requires_explicit_kind`。
+  ??`tests/test_chat.py::test_done_collision_requires_explicit_kind`??
 
-## Audit 記錄(2026-07-24, ad-hoc code review — 文件整理 session)
+## Audit 閮?(2026-07-24, ad-hoc code review ???辣?渡? session)
 
-對未提交變更(26 檔 / +753 行)做 ad-hoc code review,實跑 162 個相關測試全綠;
-發現 2 個 Warning + 2 個中低。**本次僅記錄,程式修復待使用者指示**:
+撠?漱霈(26 瑼?/ +753 銵???ad-hoc code review,撖西? 162 ??葫閰血蝬?
+?潛 2 ??Warning + 2 ?葉雿?*?祆活????蝔?靽桀儔敺蝙?刻?蝷?*:
 
-### W1 `fixed@020-1` dashboard `_read_json` 無 Content-Length 邊界檢查 → 單執行緒伺服器可被阻塞
+### W1 `fixed@020-1` dashboard `_read_json` ??Content-Length ??瑼Ｘ ???桀銵?隡箸??典鋡恍憛?
 
-- **重現**:`channels/dashboard.py` `_read_json` 直接 `int(headers.get("Content-Length"))`
-  後 `rfile.read(length)`;負值(如 `-1`)通過 `int()`,而 `rfile.read(-1)` 語意是
-  「讀到 EOF」→ 客戶端不關連線就永久卡住,單執行緒 HTTPServer 整台阻塞。
-- **影響**:part-016 開放寫入面(POST /api/done、/api/confirm)才引入的新攻擊面;
-  綁 127.0.0.1 風險限本機,但任何本機程式都可觸發。
-- **修法**:`length` 加 `0 < length <= 65536` 邊界檢查,越界直接 400;補 boundary
-  測試(負值/零/超大/非數字)。
+- **?**:`channels/dashboard.py` `_read_json` ?湔 `int(headers.get("Content-Length"))`
+  敺?`rfile.read(length)`;鞎?憒?`-1`)?? `int()`,??`rfile.read(-1)` 隤???
+  ????EOF?? 摰Ｘ蝡臭????撠望偶銋雿??桀銵? HTTPServer ?游?餃???
+- **敶梢**:part-016 ?撖怠??POST /api/done??api/confirm)???亦??唳?;
+  蝬?127.0.0.1 憸券?璈?雿遙雿璈?撘?航孛?潦?
+- **靽格?**:`length` ??`0 < length <= 65536` ??瑼Ｘ,頞??湔 400;鋆?boundary
+  皜祈岫(鞎???頞之/?摮???
 
-### W2 `fixed@020-1` dashboard confirm 鏈不傳 `idx_db` → 自訂 vault 情境污染正式索引(K2 同型)
+### W2 `fixed@020-1` dashboard confirm ????`idx_db` ???芾? vault ??瘙⊥?甇??蝝Ｗ?(K2 ??)
 
-- **重現**:dashboard confirm route → `core.chat.confirm(...)` → writer 落地
-  note_write 時 `vindex.upsert` 使用預設 `config.INDEX_DB`;dashboard 若以自訂
-  vault 啟動(測試/多 vault 情境),確認的筆記會寫進正式 `index.db`。
-- **分析**:與 K2(consolidate/curate 已修)同型——K2 的「自訂 vault 必配
-  `vault.parent/index.db`」配對規則未套用到 `chat.confirm` 呼叫鏈。
-- **修法**:serve/route 層把 `idx_db` 一路傳進 confirm;或在 `chat.confirm` 層
-  統一套用 K2 配對規則。regression 比照 K2 模式(production sentinel 不建立)。
+- **?**:dashboard confirm route ??`core.chat.confirm(...)` ??writer ?賢
+  note_write ??`vindex.upsert` 雿輻?身 `config.INDEX_DB`;dashboard ?乩誑?芾?
+  vault ??(皜祈岫/憭?vault ??),蝣箄???閮?撖恍脫迤撘?`index.db`??
+- **??**:??K2(consolidate/curate 撌脖耨)???2 ?閮?vault 敹?
+  `vault.parent/index.db`??撠??憟??`chat.confirm` ?澆??
+- **靽格?**:serve/route 撅斗? `idx_db` 銝頝臬??confirm;? `chat.confirm` 撅?
+  蝯曹?憟 K2 ??閬??egression 瘥 K2 璅∪?(production sentinel 銝遣蝡???
 
-### M1 `open` migrate_kb_2_0 per-file except 漏 `UnicodeDecodeError`
+### M1 `open` migrate_kb_2_0 per-file except 瞍?`UnicodeDecodeError`
 
-- **重現**:`scripts/migrate_kb_2_0.py` 逐檔 try/except 未捕 `UnicodeDecodeError`,
-  壞編碼檔會讓整批 migration 中途炸掉——已處理檔案已改、其餘沒跑,停在中間態。
-- **修法**:per-file except 補 `UnicodeDecodeError`,記檔名後繼續;或讀檔加
-  `errors="replace"` 並產出警告清單。
+- **?**:`scripts/migrate_kb_2_0.py` ?? try/except ?芣? `UnicodeDecodeError`,
+  憯楊蝣潭????湔 migration 銝剝?歇??瑼?撌脫?擗?頝??銝剝???
+- **靽格?**:per-file except 鋆?`UnicodeDecodeError`,閮???蝜潛?;??瑼?
+  `errors="replace"` 銝衣?箄郎???柴?
 
-### M2 `fixed@020-1` dashboard 以中文文案 `startswith("✔")` 判 confirm 結果
+### M2 `fixed@020-1` dashboard 隞乩葉??獢?`startswith("??)` ??confirm 蝯?
 
-- **重現**:`channels/dashboard.py` confirm/done 後用 `reply.text.startswith("✔")`
-  判斷成功與否——API 契約耦合在顯示文案上,改文案就靜默翻轉行為。
-- **修法**:`Reply` 補結構化 outcome 欄位(如 `ok: bool`),channel 只讀欄位不
-  解析文案。
+- **?**:`channels/dashboard.py` confirm/done 敺 `reply.text.startswith("??)`
+  ?斗????PI 憟??血??券＊蝷箸?獢?,?寞?獢停??蝧餉?銵??
+- **靽格?**:`Reply` 鋆?瑽? outcome 甈?(憒?`ok: bool`),channel ?芾?甈?銝?
+  閫??????
+

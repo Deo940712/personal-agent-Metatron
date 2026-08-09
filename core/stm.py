@@ -211,9 +211,11 @@ TABLES = ("schedule", "tasks", "projects", "cursors", "agent_runs", "events",
           "watchlist")
 
 
-def connect(db_path: Path | None = None) -> sqlite3.Connection:
-    """開啟 DB1 連線(WAL、外鍵開啟)。呼叫者負責 close。"""
+def connect(db_path: Path | None = None, *, require_exists: bool = True) -> sqlite3.Connection:
+    """Open an existing DB1 connection; creation belongs to :func:`init`."""
     path = db_path or config.STATE_DB
+    if require_exists and not path.is_file():
+        raise FileNotFoundError(f"DB1 does not exist: {path}")
     con = sqlite3.connect(path)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA foreign_keys=ON")

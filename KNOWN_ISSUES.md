@@ -99,6 +99,14 @@
 - sqlite 預設行為:connect 即建檔 → 打錯路徑得到 0 表空 DB 而非報錯
 - **修法**:connect 加 `require_exists=True` 參數(init 除外);或 URI `mode=rw`
 
+
+### part-020 slice-002 evidence
+
+- B7 mitigation: core.stm.connect() now fails closed for a missing DB path, preventing typo-path empty DB creation; internal db=None default removal remains future work.
+- B10 fix: existing_tables() and all normal connect() callers require an existing DB; explicit stm.init() remains the creator path.
+- Regression: 	ests/test_db_path_safety.py plus full suite passed (973 passed, 1 warning).
+- Operational probe: scripts/probes/probe_db_b7.py rejected a disposable missing path and confirmed TARGET_EXISTS=False.
+
 ### B11 `fixed@002-3` `_reject` 把 desc 塞進 events.target——target 欄位語意被污染
 
 - events.target 應是「影響對象 id/路徑」,拒絕記錄卻塞了提案描述字串
